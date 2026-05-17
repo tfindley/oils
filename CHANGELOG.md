@@ -4,6 +4,17 @@ All notable changes to Potions & Lotions are documented here.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-05-17
+
+### Security
+- **Bumped `next` 16.2.4 → 16.2.6** (and `eslint-config-next` to match). Resolves 13 advisories disclosed against 16.2.4–16.2.5, including:
+  - Multiple Denial-of-Service issues (Server Components, Cache Components, Image Optimization API)
+  - Middleware/Proxy bypass via segment-prefetch routes (incomplete-fix follow-up), dynamic route parameter injection, and Pages-Router i18n
+  - Cache poisoning in RSC responses and in middleware redirects
+  - XSS in App Router with CSP nonces, and in `beforeInteractive` scripts with untrusted input
+  - Server-side request forgery via WebSocket upgrades
+- `npm audit` now reports **0 vulnerabilities** (was 13 high + others on `npm audit` post-disclosure wave). Most of the listed advisories don't apply to our usage anyway — we don't run Cache Components, `beforeInteractive` scripts, websocket upgrades, or Pages-Router i18n — but patching to the fixed version is the right baseline.
+
 ## [0.2.2] — 2026-05-13
 
 ### Fixed
@@ -421,7 +432,8 @@ Public-launch hardening pass: a publicly-reachable site needs more than localhos
 - GitHub Actions CI/CD: builds and pushes Docker image to `ghcr.io/tfindley/oil-blender` on `v*.*.*` tag push, creates GitHub Release
 - Oil enrichment pipeline (`npm run enrich`) using Claude API for richer AI-generated profiles
 
-[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/tfindley/oil-blender/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tfindley/oil-blender/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/tfindley/oil-blender/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tfindley/oil-blender/compare/v0.1.19...v0.2.0
