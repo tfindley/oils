@@ -4,6 +4,19 @@ All notable changes to Potions & Lotions are documented here.
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-05-13
+
+### Fixed
+- **Admin panel mobile pass.** The admin surface was desktop-only; on an iPhone 14 Pro Max in portrait, the top nav overflowed off-screen, oil/blend tables clipped most columns, and the OilPairings table on the oil-edit page hid the Edit/Delete buttons. All resolved:
+  - **`<AdminNav>`**: hamburger drawer below the `md` breakpoint. Drawer holds the four nav links plus "Back to Site" and "Sign Out"; closes on outside-tap or route change. Brand label stays visible alongside the hamburger.
+  - **Oil Admin (`/admin`)**: card list on mobile (name + botanical + type badge in a header row; Enriched/Buy/Image indicators in a metadata row; right-aligned Edit). Header buttons stack vertically below the title.
+  - **Blends Admin (`/admin/blends`)**: card list on mobile with checkbox + name/author + grade badge + view-count/dates + flag indicators + Edit/Delete actions. Search input now `w-full sm:w-72` so it stops forcing horizontal scroll.
+  - **Oil-edit pairings table (`/admin/oils/[id]`)**: extracted edit-state into a `usePairingEdit` hook; mobile renders each pairing as a card with proper Save/Cancel/Edit/Delete buttons (not text-link hovers).
+- All four admin surfaces keep their original desktop table layout at `sm+`; mobile gets the card variant. No data-model changes.
+
+### Internal
+- `.gitignore` defensive patterns added in v0.2.1 (`.private/`, `*.private`, `*.private.md`, `PLAN-PRIVATE*`, `PRIVATE-*`) are now committed (were previously local-only).
+
 ## [0.2.1] — 2026-05-09
 
 ### Added
@@ -408,7 +421,8 @@ Public-launch hardening pass: a publicly-reachable site needs more than localhos
 - GitHub Actions CI/CD: builds and pushes Docker image to `ghcr.io/tfindley/oil-blender` on `v*.*.*` tag push, creates GitHub Release
 - Oil enrichment pipeline (`npm run enrich`) using Claude API for richer AI-generated profiles
 
-[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/tfindley/oil-blender/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/tfindley/oil-blender/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tfindley/oil-blender/compare/v0.1.19...v0.2.0
 [0.1.19]: https://github.com/tfindley/oil-blender/compare/v0.1.18...v0.1.19

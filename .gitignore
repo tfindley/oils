@@ -44,3 +44,16 @@ next-env.d.ts
 # visual studio code
 .vscode/*
 *.code-workspace
+
+# docs
+/docs/ROADMAP.md
+
+# private — anything matching these patterns is unconditionally ignored
+# so commercial / strategic notes can't accidentally enter the repo.
+# Real private content lives at ~/devel/oils-v3-private/ (outside this repo).
+.private/
+**/.private/
+*.private
+*.private.md
+PLAN-PRIVATE*
+PRIVATE-*

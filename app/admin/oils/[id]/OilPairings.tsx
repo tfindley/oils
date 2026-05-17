@@ -35,7 +35,7 @@ function RatingSelect({ value, onChange }: { value: PairingRating; onChange: (v:
   )
 }
 
-function PairingRow({ oilId, pairing }: { oilId: string; pairing: Pairing }) {
+function usePairingEdit(oilId: string, pairing: Pairing) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [rating, setRating] = useState<PairingRating>(pairing.rating)
@@ -69,6 +69,13 @@ function PairingRow({ oilId, pairing }: { oilId: string; pairing: Pairing }) {
       router.refresh()
     })
   }
+
+  return { editing, setEditing, rating, setRating, reason, setReason, pending, error, cancelEdit, handleSave, handleDelete }
+}
+
+function PairingRow({ oilId, pairing }: { oilId: string; pairing: Pairing }) {
+  const { editing, setEditing, rating, setRating, reason, setReason, pending, error, cancelEdit, handleSave, handleDelete } =
+    usePairingEdit(oilId, pairing)
 
   return (
     <tr className="border-b border-stone-100 dark:border-stone-700">
@@ -112,6 +119,69 @@ function PairingRow({ oilId, pairing }: { oilId: string; pairing: Pairing }) {
         {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       </td>
     </tr>
+  )
+}
+
+function PairingCard({ oilId, pairing }: { oilId: string; pairing: Pairing }) {
+  const { editing, setEditing, rating, setRating, reason, setReason, pending, error, cancelEdit, handleSave, handleDelete } =
+    usePairingEdit(oilId, pairing)
+
+  return (
+    <li className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-800">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-medium text-stone-800 dark:text-stone-100">{pairing.otherName}</span>
+        {editing
+          ? <RatingSelect value={rating} onChange={setRating} />
+          : <PairingBadge rating={pairing.rating} />}
+      </div>
+      <div className="mt-2">
+        {editing ? (
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100"
+          />
+        ) : (
+          <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-400">{pairing.reason}</p>
+        )}
+      </div>
+      <div className="mt-3 flex justify-end gap-2">
+        {editing ? (
+          <>
+            <button
+              onClick={cancelEdit}
+              className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={pending}
+              className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+            >
+              Save
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setEditing(true)}
+              className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:border-stone-600 dark:text-amber-500 dark:hover:bg-amber-950"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={pending}
+              className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </li>
   )
 }
 
@@ -161,23 +231,33 @@ export function OilPairings({ oilId, pairings, otherOils }: OilPairingsProps) {
       </h2>
 
       {pairings.length > 0 && (
-        <div className="mb-6 overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 dark:bg-stone-800">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Oil</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Rating</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Reason</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pairings.map((p) => (
-                <PairingRow key={p.id} oilId={oilId} pairing={p} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Mobile: card list */}
+          <ul className="mb-6 space-y-2 sm:hidden">
+            {pairings.map((p) => (
+              <PairingCard key={p.id} oilId={oilId} pairing={p} />
+            ))}
+          </ul>
+
+          {/* Desktop: table */}
+          <div className="mb-6 hidden overflow-hidden rounded-lg border border-stone-200 sm:block dark:border-stone-700">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 dark:bg-stone-800">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Oil</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Rating</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-stone-600 dark:text-stone-400">Reason</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {pairings.map((p) => (
+                  <PairingRow key={p.id} oilId={oilId} pairing={p} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 dark:border-stone-700 dark:bg-stone-800">
