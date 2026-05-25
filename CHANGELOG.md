@@ -4,6 +4,23 @@ All notable changes to Potions & Lotions are documented here.
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-05-25
+
+### Security
+- **Docker image vulnerability sweep.** Grype scan of `ghcr.io/tfindley/oil-blender:latest` (2026-05-25) reported 18 vulnerabilities — 0 critical, 11 high, 5 medium, 2 low. None were exploitable in our actual application usage (`tar`, `cross-spawn`, `glob`, `minimatch`, etc. are build-tooling / install-time utilities), but a clean scan is the right baseline.
+- **`package.json` overrides** added to pin patched versions of 7 transitive npm dependencies:
+  - `tar` → `^7.5.11` (5 high-severity path-traversal advisories)
+  - `cross-spawn` → `^7.0.5` (ReDoS)
+  - `minimatch` → `^9.0.7` (3 ReDoS advisories)
+  - `glob` → `^10.5.0` (CLI command injection)
+  - `brace-expansion` → `^2.0.3` (ReDoS + memory exhaustion)
+  - `diff` → `^5.2.2` (DoS in `parsePatch`/`applyPatch`)
+  - `ip-address` → `^10.1.1` (XSS in `Address6` HTML methods)
+- **Docker base image bumped** from `node:20-alpine` to `node:22-alpine`. Resolves CVE-2025-60876 (BusyBox `wget` request-target validation) carried by the older Alpine layer in `node:20-alpine`. Node 22 is the current LTS and removes the impending Node 20 EOL deadline (April 2026).
+
+### Internal
+- Grype scan reports moved to `docs/security/` for historical reference.
+
 ## [0.2.3] — 2026-05-17
 
 ### Security
@@ -432,7 +449,8 @@ Public-launch hardening pass: a publicly-reachable site needs more than localhos
 - GitHub Actions CI/CD: builds and pushes Docker image to `ghcr.io/tfindley/oil-blender` on `v*.*.*` tag push, creates GitHub Release
 - Oil enrichment pipeline (`npm run enrich`) using Claude API for richer AI-generated profiles
 
-[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/tfindley/oil-blender/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tfindley/oil-blender/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tfindley/oil-blender/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/tfindley/oil-blender/compare/v0.2.0...v0.2.1
