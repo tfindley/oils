@@ -4,6 +4,37 @@ All notable changes to Potions & Lotions are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-26
+
+🎉 **First stable release.** No new code in this release — just a deliberate commitment to API stability.
+
+From here:
+
+- **Public URLs are stable.** `/blend/[id]`, `/oils/[id]`, `/blends`, every saved share link keeps working. No breaking URL changes without a 2.0.
+- **Database schema is stable.** All future migrations are additive; saved blends keep loading.
+- **Admin contract is stable.** `ADMIN_SECRET` env var, `/admin/login` flow, the HMAC session-token cookie pattern.
+- **Public deployment is the canonical reference.** Image at `ghcr.io/tfindley/oil-blender:1.0.0` is treated as production-blessed.
+
+### What 1.0 ships with
+
+Everything accumulated since v0.0.1 — too much to itemise here, but the headline capabilities:
+
+- Tabbed blend builder (Carriers / Essentials / Quantities / Save) with multi-carrier additive volume model, real-time A–F compatibility scoring, drift warnings, dilution presets.
+- 55-oil library (30 essential + 25 carrier) with Claude-enriched profiles, ~96 curated pairings, EXCELLENT → UNSAFE rating system, hard-blocked unsafe combinations.
+- Oil compare tool, drag-to-scroll compatibility matrix, aromatherapy glossary, oil profile pages with buy-link affiliate hooks.
+- Shareable saved blends with permanent URLs, view tracking, 30-day auto-purge of inactive blends, featured-blend curation, PDF recipe-card download with QR code.
+- Admin panel: oil CRUD with optional Claude-backed AI quick-add; blend management with search/import/promote; database tools; site settings (tooltip + footer-link toggles); responsive mobile UI.
+- Account-less public model: anyone can save without signing up; localStorage-backed in-progress blend persists across pages; cross-page blend cart widget with live grade.
+- Production hardening: HMAC-signed admin session tokens, constant-time auth, IP-keyed rate limiting on save + admin-login, HSTS + CSP-Report-Only + other security headers, URL-scheme validation, robots.txt, defensive `.gitignore` patterns, 30-day auto-purge.
+- Operational: Docker image on GHCR, `node:22-alpine` base, multi-stage build with standalone output, in-container migration runner, automatic schema migrations on container start, systemd-timer auto-purge + Postgres backup documented, cross-host migration runbook documented.
+- Privacy: per-page localStorage drafts never leave the browser; admin-toggleable help tooltips; UK/EU-aware privacy copy disclosing IP-based rate-limiting.
+
+### Verification
+
+`npm audit` clean (0 vulnerabilities). Latest Grype scan of `ghcr.io/tfindley/oil-blender:0.2.4`: 7 findings, all `Carried` (vendored inside Next.js / bundled in Prisma engines / Alpine BusyBox awaiting upstream patch). None reachable from app code at runtime. Full triage in [docs/SECURITY-RISK-REGISTER.md](docs/SECURITY-RISK-REGISTER.md).
+
+Real-world tested by the project's massage-therapy class; no functional issues reported.
+
 ## [0.2.4] — 2026-05-25
 
 ### Security
@@ -449,7 +480,8 @@ Public-launch hardening pass: a publicly-reachable site needs more than localhos
 - GitHub Actions CI/CD: builds and pushes Docker image to `ghcr.io/tfindley/oil-blender` on `v*.*.*` tag push, creates GitHub Release
 - Oil enrichment pipeline (`npm run enrich`) using Claude API for richer AI-generated profiles
 
-[Unreleased]: https://github.com/tfindley/oil-blender/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/tfindley/oil-blender/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/tfindley/oil-blender/compare/v0.2.4...v1.0.0
 [0.2.4]: https://github.com/tfindley/oil-blender/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/tfindley/oil-blender/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/tfindley/oil-blender/compare/v0.2.1...v0.2.2
