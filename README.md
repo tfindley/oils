@@ -167,13 +167,159 @@ Authorization: Bearer <CRON_SECRET>
 
 Returns `{ "deleted": 3, "message": "Purged 3 inactive blend(s)" }`.
 
-### Host cron setup
+### Scheduling on the host
 
-Add this to the crontab on your host (runs at 03:00 daily):
+Pick whichever scheduler your host supports. Both run on the host and curl the endpoint exposed by the container — nothing extra needs to run inside the container.
+
+#### Option A — systemd timer (recommended on modern Linux)
+
+Create `/etc/systemd/system/oil-blender-purge.service`:
+
+```ini
+[Unit]
+Description=Oil Blender auto-purge of inactive blends
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/srv/oil-blender/.env
+ExecStart=/usr/bin/curl -sfS --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" http://localhost:3000/api/cron/purge
+```
+
+Adjust `EnvironmentFile=` to the path of the `.env` that holds `CRON_SECRET`. If port 3000 isn't bound on the host (e.g. you front the container with Traefik only), replace `http://localhost:3000` with your public hostname.
+
+Create `/etc/systemd/system/oil-blender-purge.timer`:
+
+```ini
+[Unit]
+Description=Run Oil Blender auto-purge daily at 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable and test:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now oil-blender-purge.timer
+sudo systemctl list-timers oil-blender-purge.timer   # confirm scheduled
+sudo systemctl start oil-blender-purge.service       # one-shot test run
+sudo journalctl -u oil-blender-purge.service -n 30   # see result
+```
+
+A successful run shows `{"deleted":N,"message":"Purged N inactive blend(s)"}` in the logs.
+
+#### Option B — classic cron
 
 ```cron
 0 3 * * *  curl -sf -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/purge
 ```
+
+If your host doesn't have a cron daemon, install one (`sudo apt install cron && sudo systemctl enable --now cron` on Debian/Ubuntu).
+
+---
+
+## Database Backups
+
+The auto-purge keeps the database tidy; **backups** keep your data recoverable if something goes wrong. Postgres `pg_dump` is the standard tool. Two scheduling patterns below, depending on where the database lives.
+
+Same shape as the auto-purge in either case: systemd timer + service.
+
+### Option A — database is in a container alongside the app
+
+Use `docker compose exec` to run `pg_dump` inside the database container; pipe the output to a file on the host.
+
+`/etc/systemd/system/oil-blender-backup.service`:
+
+```ini
+[Unit]
+Description=Oil Blender Postgres backup (containerised DB)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/oil-blender
+ExecStart=/bin/sh -c 'docker compose exec -T db pg_dump -U oils -Fc oils > /var/backups/oil-blender/oils-$(date +%%Y-%%m-%%d).dump && find /var/backups/oil-blender -name "oils-*.dump" -mtime +14 -delete'
+```
+
+Adjust `WorkingDirectory=` to the directory holding your `docker-compose.yml`, and the `-U oils oils` arguments to match your DB user / database name. The `find … -mtime +14 -delete` rolls off backups older than 14 days; change the number to your preferred retention.
+
+### Option B — database is external (managed Postgres, separate VPS, host install)
+
+If the database isn't a Docker Compose service, you don't need `docker compose exec`. Use `pg_dump` directly with your `DATABASE_URL`. **This requires `postgresql-client` installed on the host** (`sudo apt install postgresql-client`).
+
+`/etc/systemd/system/oil-blender-backup.service`:
+
+```ini
+[Unit]
+Description=Oil Blender Postgres backup (external DB)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/srv/oil-blender/.env
+ExecStart=/bin/sh -c 'pg_dump -Fc "$DATABASE_URL" -f /var/backups/oil-blender/oils-$(date +%%Y-%%m-%%d).dump && find /var/backups/oil-blender -name "oils-*.dump" -mtime +14 -delete'
+```
+
+This reads `DATABASE_URL` from the same `.env` your app uses, so credentials and host are picked up automatically.
+
+### Either option — shared timer
+
+`/etc/systemd/system/oil-blender-backup.timer`:
+
+```ini
+[Unit]
+Description=Nightly Oil Blender Postgres backup at 02:30
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable + smoke-test:
+
+```bash
+sudo mkdir -p /var/backups/oil-blender
+sudo systemctl daemon-reload
+sudo systemctl enable --now oil-blender-backup.timer
+sudo systemctl start oil-blender-backup.service   # one-shot
+sudo ls -lh /var/backups/oil-blender              # should see today's .dump
+```
+
+### Restore drill
+
+Untested backups aren't backups. At least once, confirm a dump can be restored into a scratch database:
+
+```bash
+# Containerised DB:
+docker compose exec -T db createdb -U oils oils_restore_test
+cat /var/backups/oil-blender/oils-YYYY-MM-DD.dump | docker compose exec -T db pg_restore -U oils -d oils_restore_test -c
+docker compose exec -T db dropdb -U oils oils_restore_test
+
+# External DB:
+createdb -h <host> -U oils oils_restore_test
+pg_restore -h <host> -U oils -d oils_restore_test -c /var/backups/oil-blender/oils-YYYY-MM-DD.dump
+dropdb -h <host> -U oils oils_restore_test
+```
+
+If `pg_restore` completes without errors, your backup is sound.
+
+### Off-machine copies
+
+A backup that lives only on the same VPS as the database is one disk failure away from gone. Push the dumps somewhere off-machine on a similar schedule — `rclone`, `restic`, `borg`, or a simple `aws s3 sync` cron all work. Cheapest: Backblaze B2 (~$0.005/GB/month) or Cloudflare R2 (free tier covers small sites).
 
 ---
 
