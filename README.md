@@ -321,6 +321,10 @@ If `pg_restore` completes without errors, your backup is sound.
 
 A backup that lives only on the same VPS as the database is one disk failure away from gone. Push the dumps somewhere off-machine on a similar schedule — `rclone`, `restic`, `borg`, or a simple `aws s3 sync` cron all work. Cheapest: Backblaze B2 (~$0.005/GB/month) or Cloudflare R2 (free tier covers small sites).
 
+### Migrating to a new host or domain
+
+The backup/restore commands above cover same-host snapshots. Cross-host migration adds DNS, environment, and redirect concerns — see [docs/MIGRATION.md](docs/MIGRATION.md) for the step-by-step cutover runbook.
+
 ---
 
 ## Enriching Oil Data
