@@ -113,6 +113,12 @@ Specific version tags are also available — see [Releases](https://github.com/t
 | `NEXT_PUBLIC_SITE_NAME` | No | `Oil Blender` | Display name shown in the header, footer, page titles, and PDF |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | No | — | Google Analytics 4 measurement ID (`G-XXXXXXXXXX`); omit to disable |
 | `ANTHROPIC_API_KEY` | No | — | Enables AI enrichment via the Admin → Database panel and `node scripts/enrich.js` |
+| `AUTH_SECRET` | Yes (prod) | — | Signs Auth.js session cookies. Generate: `openssl rand -base64 32`. Required for user accounts to work in production. |
+| `RESEND_API_KEY` | No* | — | Resend HTTP API key for transactional email (signup verification, password reset). |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` | No* | — | Alternative to Resend — Nodemailer SMTP transport. Used only when `RESEND_API_KEY` is unset. |
+| `EMAIL_FROM` | No | `no-reply@oilblender.example` | "From" address shown on outbound mail. Must match a verified domain on whichever transport you chose. |
+
+\* In production, **at least one** of `RESEND_API_KEY` or `SMTP_HOST` must be set, or signup/password-reset emails will fail. In development neither is required — emails are logged to the server console.
 
 ---
 

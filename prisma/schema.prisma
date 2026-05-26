@@ -19,6 +19,70 @@ enum PairingRating {
   UNSAFE
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+// Auth.js v5 + Prisma adapter conventions. Migration is purely additive;
+// anonymous blends keep working unchanged in v1.1.0.
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?   // null when only OAuth providers are linked
+  name          String?
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  // "oauth" | "oidc" | "email" | "credentials"
+  provider          String  // "google" | "microsoft" | "github" | "credentials"
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String   // email address for verify; userId for password reset
+  token      String   @unique
+  expires    DateTime
+  purpose    String   @default("EMAIL_VERIFY")  // "EMAIL_VERIFY" | "PASSWORD_RESET"
+
+  @@unique([identifier, token])
+  @@index([identifier])
+}
+
 model Oil {
   id                String   @id @default(cuid())
   name              String   @unique

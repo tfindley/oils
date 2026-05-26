@@ -95,6 +95,29 @@ Open [http://localhost:3000](http://localhost:3000).
 
 > **Stale cache?** If a Tailwind class change, server-component output, or Prisma type doesn't seem to update, clear the Next.js build cache and restart: `rm -rf .next && npm run dev`. HMR usually picks up changes on its own — only reach for this when something looks frozen.
 
+### Local email in dev (signup verification, password reset)
+
+When neither `RESEND_API_KEY` nor `SMTP_HOST` is configured **and** `NODE_ENV !== 'production'`, `lib/email.ts` falls back to logging email contents to the server console. This lets the signup → verify-email flow work end-to-end without any email-provider setup.
+
+When you submit the signup form, look at the `npm run dev` terminal for:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[email:dev-console] No email transport configured.
+  To:      you@example.com
+  Subject: Verify your Oil Blender account
+  Text:
+    Welcome to Oil Blender.
+    Confirm your email by visiting:
+    http://localhost:3000/verify-email?token=...
+    ...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Paste the URL into the browser to verify the account.
+
+For staging / production deployments, set either `RESEND_API_KEY` or `SMTP_HOST` (plus `EMAIL_FROM`) so real emails get delivered. See [.env.example](../.env.example) for the full list of mail-related env vars.
+
 ---
 
 ## Schema Changes

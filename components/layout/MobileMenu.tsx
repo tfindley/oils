@@ -13,7 +13,11 @@ const NAV_LINKS = [
   { href: '/about', label: 'About' },
 ]
 
-export function MobileMenu() {
+interface MobileMenuProps {
+  isLoggedIn?: boolean
+}
+
+export function MobileMenu({ isLoggedIn = false }: MobileMenuProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const ref = useRef<HTMLDivElement>(null)
@@ -70,6 +74,24 @@ export function MobileMenu() {
                 </Link>
               )
             })}
+            {!isLoggedIn && (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center py-3.5 text-base font-medium text-stone-700 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-400"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/signup"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center py-3.5 text-base font-semibold text-amber-700 dark:text-amber-500"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}
