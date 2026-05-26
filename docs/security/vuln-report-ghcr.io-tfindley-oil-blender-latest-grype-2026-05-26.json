@@ -1,0 +1,82 @@
+{
+  "image": "ghcr.io/tfindley/oil-blender:latest",
+  "scanner": "grype",
+  "scanDuration": 146668,
+  "summary": {
+    "critical": 0,
+    "high": 1,
+    "medium": 6,
+    "low": 0,
+    "negligible": 0,
+    "unknown": 0
+  },
+  "vulnerabilities": [
+    {
+      "id": "GHSA-3v7f-55p6-f55p",
+      "severity": "medium",
+      "package": "picomatch",
+      "version": "4.0.3",
+      "fixedVersion": "4.0.4",
+      "description": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+      "link": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+      "scanner": "grype"
+    },
+    {
+      "id": "CVE-2025-60876",
+      "severity": "medium",
+      "package": "busybox",
+      "version": "1.37.0-r30",
+      "description": "BusyBox wget thru 1.3.7 accepted raw CR (0x0D)/LF (0x0A) and other C0 control bytes in the HTTP request-target (path/query), allowing the request line to be split and attacker-controlled headers to be injected. To preserve the HTTP/1.1 request-line shape METHOD SP request-target SP HTTP/1.1, a raw space (0x20) in the request-target must also be rejected (clients should use %20).",
+      "link": "https://nvd.nist.gov/vuln/detail/CVE-2025-60876",
+      "scanner": "grype"
+    },
+    {
+      "id": "CVE-2025-60876",
+      "severity": "medium",
+      "package": "busybox-binsh",
+      "version": "1.37.0-r30",
+      "description": "BusyBox wget thru 1.3.7 accepted raw CR (0x0D)/LF (0x0A) and other C0 control bytes in the HTTP request-target (path/query), allowing the request line to be split and attacker-controlled headers to be injected. To preserve the HTTP/1.1 request-line shape METHOD SP request-target SP HTTP/1.1, a raw space (0x20) in the request-target must also be rejected (clients should use %20).",
+      "link": "https://nvd.nist.gov/vuln/detail/CVE-2025-60876",
+      "scanner": "grype"
+    },
+    {
+      "id": "CVE-2025-60876",
+      "severity": "medium",
+      "package": "ssl_client",
+      "version": "1.37.0-r30",
+      "description": "BusyBox wget thru 1.3.7 accepted raw CR (0x0D)/LF (0x0A) and other C0 control bytes in the HTTP request-target (path/query), allowing the request line to be split and attacker-controlled headers to be injected. To preserve the HTTP/1.1 request-line shape METHOD SP request-target SP HTTP/1.1, a raw space (0x20) in the request-target must also be rejected (clients should use %20).",
+      "link": "https://nvd.nist.gov/vuln/detail/CVE-2025-60876",
+      "scanner": "grype"
+    },
+    {
+      "id": "GHSA-c2c7-rcm5-vvqj",
+      "severity": "high",
+      "package": "picomatch",
+      "version": "4.0.3",
+      "fixedVersion": "4.0.4",
+      "description": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+      "link": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+      "scanner": "grype"
+    },
+    {
+      "id": "GHSA-f886-m6hf-6m8v",
+      "severity": "medium",
+      "package": "brace-expansion",
+      "version": "2.0.2",
+      "fixedVersion": "2.0.3",
+      "description": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+      "link": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+      "scanner": "grype"
+    },
+    {
+      "id": "GHSA-v2v4-37r5-5v8g",
+      "severity": "medium",
+      "package": "ip-address",
+      "version": "10.1.0",
+      "fixedVersion": "10.1.1",
+      "description": "ip-address has XSS in Address6 HTML-emitting methods",
+      "link": "https://github.com/advisories/GHSA-v2v4-37r5-5v8g",
+      "scanner": "grype"
+    }
+  ]
+}
