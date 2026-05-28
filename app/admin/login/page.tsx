@@ -1,4 +1,7 @@
-import { notFound } from 'next/navigation'
+import { cookies } from 'next/headers'
+import { notFound, redirect } from 'next/navigation'
+import { auth } from '@/auth'
+import { verifySessionToken } from '@/lib/admin-auth'
 import { getSettings } from '@/lib/settings'
 import { AdminLoginForm } from './AdminLoginForm'
 
@@ -12,6 +15,17 @@ export default async function AdminLoginPage() {
   // hide this page entirely — return 404 so the form isn't even discoverable.
   if (!settings.legacyAdminEnabled && !forceLegacy) {
     notFound()
+  }
+
+  // If already authenticated as admin, skip the form and go straight to /admin.
+  const session = await auth().catch(() => null)
+  if (session?.user?.role === 'ADMIN') redirect('/admin')
+
+  const secret = process.env.ADMIN_SECRET
+  if (secret) {
+    const jar = await cookies()
+    const token = jar.get('admin_token')?.value
+    if (await verifySessionToken(token, secret).catch(() => false)) redirect('/admin')
   }
 
   return (

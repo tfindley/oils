@@ -33,7 +33,9 @@ export function AdminNav() {
   // Close drawer when the route changes
   useEffect(() => setOpen(false), [pathname])
 
-  if (pathname === '/admin/login') return null
+  // Note: the admin layout already gates rendering on server-side auth, so
+  // AdminNav only renders when the request is authenticated. No client-side
+  // pathname check needed.
 
   function isActive(href: string) {
     return href === '/admin' ? pathname === '/admin' : pathname.startsWith(href)
