@@ -39,7 +39,11 @@ export async function Header() {
           <BlendCart />
           <ThemeToggle />
           {session?.user ? (
-            <UserMenu name={session.user.name ?? session.user.email ?? 'You'} image={session.user.image ?? null} />
+            <UserMenu
+              name={session.user.name ?? session.user.email ?? 'You'}
+              image={session.user.image ?? null}
+              isAdmin={session.user.role === 'ADMIN'}
+            />
           ) : (
             <div className="hidden items-center gap-1 md:flex">
               <Link
@@ -56,7 +60,7 @@ export async function Header() {
               </Link>
             </div>
           )}
-          <MobileMenu isLoggedIn={!!session?.user} />
+          <MobileMenu isLoggedIn={!!session?.user} isAdmin={session?.user?.role === 'ADMIN'} />
         </div>
       </div>
     </header>

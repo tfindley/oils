@@ -15,9 +15,10 @@ const NAV_LINKS = [
 
 interface MobileMenuProps {
   isLoggedIn?: boolean
+  isAdmin?: boolean
 }
 
-export function MobileMenu({ isLoggedIn = false }: MobileMenuProps) {
+export function MobileMenu({ isLoggedIn = false, isAdmin = false }: MobileMenuProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const ref = useRef<HTMLDivElement>(null)
@@ -75,13 +76,24 @@ export function MobileMenu({ isLoggedIn = false }: MobileMenuProps) {
               )
             })}
             {isLoggedIn ? (
-              <Link
-                href="/my-blends"
-                onClick={() => setOpen(false)}
-                className="flex items-center py-3.5 text-base font-medium text-stone-700 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-400"
-              >
-                My Blends
-              </Link>
+              <>
+                <Link
+                  href="/my-blends"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center py-3.5 text-base font-medium text-stone-700 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-400"
+                >
+                  My Blends
+                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center py-3.5 text-base font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-500 dark:hover:text-amber-400"
+                  >
+                    ⚙ Admin panel
+                  </Link>
+                )}
+              </>
             ) : (
               <>
                 <Link

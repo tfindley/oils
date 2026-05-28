@@ -3,7 +3,15 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 
-export function UserMenu({ name, image }: { name: string; image: string | null }) {
+export function UserMenu({
+  name,
+  image,
+  isAdmin = false,
+}: {
+  name: string
+  image: string | null
+  isAdmin?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -64,9 +72,18 @@ export function UserMenu({ name, image }: { name: string; image: string | null }
             >
               Account settings
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="block border-t border-stone-100 px-4 py-2 font-medium text-amber-700 hover:bg-amber-50 dark:border-stone-700 dark:text-amber-500 dark:hover:bg-amber-950/30"
+              >
+                ⚙ Admin panel
+              </Link>
+            )}
             <a
               href="/logout"
-              className="block px-4 py-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+              className="block border-t border-stone-100 px-4 py-2 text-red-600 hover:bg-red-50 dark:border-stone-700 dark:text-red-400 dark:hover:bg-red-950/30"
             >
               Sign out
             </a>
