@@ -31,6 +31,13 @@ export default async function AdminSettingsPage() {
           description={`Show "Found a problem? Report it on GitHub" in the site footer. Turn off if you'd rather not point users at the GitHub repo.`}
         />
 
+        <ToggleField
+          name="allowAnonymousSaves"
+          defaultChecked={settings.allowAnonymousSaves}
+          label="Allow anonymous blend saves"
+          description="Let signed-out visitors save blends with public share URLs (the original v1.0 behaviour). Turn off to require a login before saving — useful if you want to track all blend activity to a user."
+        />
+
         <div className="flex justify-end">
           <button
             type="submit"

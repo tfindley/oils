@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { rateLimit } from '@/lib/rate-limit'
+import { getSettings } from '@/lib/settings'
+import { auth } from '@/auth'
 import { z } from 'zod'
 
 const CreateBlendSchema = z.object({
@@ -29,6 +31,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'Too many saves — try again in a moment.' },
       { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    )
+  }
+
+  const [session, settings] = await Promise.all([auth(), getSettings()])
+
+  if (!session?.user?.id && !settings.allowAnonymousSaves) {
+    return NextResponse.json(
+      { error: 'Sign in to save blends. Anonymous saves are currently disabled.' },
+      { status: 401 },
     )
   }
 
@@ -83,6 +94,10 @@ export async function POST(req: NextRequest) {
       purpose: data.purpose,
       notes: data.notes,
       grade: data.grade,
+      // v1.2: ownership. Authed saves get a userId + default-private.
+      // Anonymous saves stay reachable by URL (existing contract).
+      userId: session?.user?.id ?? null,
+      isShared: false,
       ingredients: {
         create: data.ingredients.map((i) => ({
           oilId: i.oilId,

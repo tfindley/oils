@@ -1,16 +1,18 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/auth'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 
 export const dynamic = 'force-dynamic'
-import { PairingBadge } from '@/components/blend/PairingBadge'
 import { Badge } from '@/components/ui/Badge'
 import { BlendScaler } from '@/components/blend/BlendScaler'
 import { CompatibilityPanel } from '@/components/blend/CompatibilityPanel'
 import { BlendPdfDownload } from '@/components/blend/BlendPdfDownload'
 import { CopyButton } from '@/components/ui/CopyButton'
+import { OwnerControls } from './OwnerControls'
+import { ClaimButton } from './ClaimButton'
 import type { BlendDetail, BlendGrade, PairingRating } from '@/types'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -22,20 +24,36 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function BlendDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const blend = await prisma.blend.findUnique({
-    where: { id },
-    include: {
-      ingredients: {
-        include: {
-          oil: {
-            select: { id: true, name: true, type: true, benefits: true, contraindications: true, aroma: true },
+  const [blend, session] = await Promise.all([
+    prisma.blend.findUnique({
+      where: { id },
+      include: {
+        ingredients: {
+          include: {
+            oil: {
+              select: { id: true, name: true, type: true, benefits: true, contraindications: true, aroma: true },
+            },
           },
         },
+        user: { select: { id: true, name: true } },
       },
-    },
-  })
+    }),
+    auth(),
+  ])
 
   if (!blend) notFound()
+
+  // Access control:
+  //   • Anonymous blends (userId == null)        → public by URL (legacy contract)
+  //   • Owned + isShared                          → public by URL
+  //   • Owned + !isShared + viewer is owner       → owner can view
+  //   • Owned + !isShared + viewer is NOT owner   → 404 (don't leak existence)
+  const viewerId = session?.user?.id ?? null
+  const isOwner = blend.userId !== null && blend.userId === viewerId
+  const isViewable = blend.userId === null || blend.isShared || isOwner
+  if (!isViewable) notFound()
+
+  const canClaim = viewerId !== null && blend.userId === null
 
   // Fire-and-forget — don't await so page render isn't delayed
   prisma.blend.update({
@@ -61,6 +79,11 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
       reason: p.reason,
     }))
 
+  // Source of truth for "by …":
+  //   • Owned blend → live User.name (auto-updates when owner renames themselves)
+  //   • Otherwise   → legacy authorName (admin-promoted blends)
+  const displayAuthor = blend.user?.name ?? blend.authorName
+
   const blendDetail: BlendDetail = {
     id: blend.id,
     name: blend.name,
@@ -73,7 +96,7 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
     createdAt: blend.createdAt.toISOString(),
     viewCount: blend.viewCount,
     lastAccessedAt: blend.lastAccessedAt?.toISOString() ?? null,
-    authorName: blend.authorName,
+    authorName: displayAuthor,
     about: blend.about,
     isFeatured: blend.isFeatured,
     isPinned: blend.isPinned,
@@ -119,8 +142,8 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
         <div>
           <p className="text-sm text-stone-500">{date}</p>
           <h1 className="mt-1 font-serif text-3xl font-bold text-stone-900 dark:text-stone-100">{blend.name}</h1>
-          {blend.authorName && (
-            <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">by {blend.authorName}</p>
+          {displayAuthor && (
+            <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">by {displayAuthor}</p>
           )}
           {(blend.about || blend.description) && (
             <p className="mt-1 text-stone-600 dark:text-stone-400">{blend.about ?? blend.description}</p>
@@ -212,16 +235,37 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
             </CardBody>
           </Card>
 
-          {/* Share */}
+          {/* Claim — only if authenticated viewer is looking at an unowned blend */}
+          {canClaim && (
+            <Card>
+              <CardHeader>
+                <h2 className="font-serif text-lg font-semibold text-stone-800 dark:text-stone-200">Claim This Blend</h2>
+              </CardHeader>
+              <CardBody>
+                <ClaimButton blendId={blend.id} />
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Share — privacy toggle when owner is viewing */}
           <Card>
             <CardHeader>
-              <h2 className="font-serif text-lg font-semibold text-stone-800 dark:text-stone-200">Share This Blend</h2>
+              <h2 className="font-serif text-lg font-semibold text-stone-800 dark:text-stone-200">
+                {isOwner ? 'Share This Blend' : 'Share This Blend'}
+              </h2>
             </CardHeader>
             <CardBody className="space-y-3">
-              <p className="break-all rounded bg-stone-50 px-3 py-2 font-mono text-xs text-stone-600 dark:bg-stone-700 dark:text-stone-400">
-                {shareUrl}
-              </p>
-              <CopyButton text={shareUrl} />
+              {isOwner && (
+                <OwnerControls blendId={blend.id} initialShared={blend.isShared} />
+              )}
+              {(blend.userId === null || blend.isShared || isOwner) && (
+                <>
+                  <p className="break-all rounded bg-stone-50 px-3 py-2 font-mono text-xs text-stone-600 dark:bg-stone-700 dark:text-stone-400">
+                    {shareUrl}
+                  </p>
+                  <CopyButton text={shareUrl} />
+                </>
+              )}
               {!isProtected && (
                 daysUntilPurge <= 10
                   ? <p className="text-xs text-amber-700 dark:text-amber-500">

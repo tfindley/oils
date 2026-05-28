@@ -8,17 +8,20 @@ import { prisma } from '@/lib/prisma'
 export interface SiteSettings {
   tooltipsEnabled: boolean
   issueReportingEnabled: boolean
+  allowAnonymousSaves: boolean
 }
 
 const DEFAULTS: SiteSettings = {
   tooltipsEnabled: true,
   issueReportingEnabled: true,
+  allowAnonymousSaves: true,
 }
 
-function pick(row: { tooltipsEnabled: boolean; issueReportingEnabled: boolean }): SiteSettings {
+function pick(row: { tooltipsEnabled: boolean; issueReportingEnabled: boolean; allowAnonymousSaves: boolean }): SiteSettings {
   return {
     tooltipsEnabled: row.tooltipsEnabled,
     issueReportingEnabled: row.issueReportingEnabled,
+    allowAnonymousSaves: row.allowAnonymousSaves,
   }
 }
 

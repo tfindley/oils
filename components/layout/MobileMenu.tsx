@@ -74,7 +74,15 @@ export function MobileMenu({ isLoggedIn = false }: MobileMenuProps) {
                 </Link>
               )
             })}
-            {!isLoggedIn && (
+            {isLoggedIn ? (
+              <Link
+                href="/my-blends"
+                onClick={() => setOpen(false)}
+                className="flex items-center py-3.5 text-base font-medium text-stone-700 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-400"
+              >
+                My Blends
+              </Link>
+            ) : (
               <>
                 <Link
                   href="/login"

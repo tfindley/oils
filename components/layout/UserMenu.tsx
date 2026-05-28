@@ -51,6 +51,13 @@ export function UserMenu({ name, image }: { name: string; image: string | null }
           </div>
           <nav className="py-1 text-sm">
             <Link
+              href="/my-blends"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700/50"
+            >
+              My Blends
+            </Link>
+            <Link
               href="/account"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700/50"

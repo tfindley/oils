@@ -42,6 +42,7 @@ model User {
 
   sessions Session[]
   accounts Account[]
+  blends   Blend[]
 }
 
 model Session {
@@ -140,13 +141,22 @@ model Blend {
 
   viewCount      Int       @default(0)
   lastAccessedAt DateTime?
-  authorName     String?
+  authorName     String?   // legacy: freetext set by admin on promoted blends
   about          String?   @db.Text
   isFeatured     Boolean   @default(false)
   isPinned       Boolean   @default(false)
   isHidden       Boolean   @default(false)
 
+  // v1.2.0 ownership. userId is null for anonymous saves (pre-v1.2 + saves
+  // when /admin/settings allowAnonymousSaves is on). Anonymous blends are
+  // always reachable via their URL — isShared only gates owned blends.
+  userId   String?
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isShared Boolean  @default(false)
+
   ingredients BlendIngredient[]
+
+  @@index([userId])
 }
 
 model BlendIngredient {
@@ -167,5 +177,6 @@ model Settings {
   id                    String   @id @default("singleton")
   tooltipsEnabled       Boolean  @default(true)
   issueReportingEnabled Boolean  @default(true)
+  allowAnonymousSaves   Boolean  @default(true)
   updatedAt             DateTime @updatedAt
 }
