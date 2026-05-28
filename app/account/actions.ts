@@ -6,25 +6,67 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { auth, signOut } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { formatDisplayName } from './display-name'
 
 export type AccountResult = { ok: true; message?: string } | { ok: false; error: string }
 
-const NameSchema = z.object({ name: z.string().max(80) })
+const NAME_RE = /^[^\s].*[^\s]$|^[^\s]$/
 
-export async function updateNameAction(_prev: AccountResult | null, formData: FormData): Promise<AccountResult> {
+const ProfileSchema = z.object({
+  firstName: z.string().min(1).max(50).regex(NAME_RE),
+  lastName: z.string().min(1).max(50).regex(NAME_RE),
+})
+
+export async function updateProfileAction(_prev: AccountResult | null, formData: FormData): Promise<AccountResult> {
   const session = await auth()
   if (!session?.user?.id) return { ok: false, error: 'Not signed in.' }
 
-  const parsed = NameSchema.safeParse({ name: formData.get('name') ?? '' })
-  if (!parsed.success) return { ok: false, error: 'Name must be 80 characters or fewer.' }
+  const parsed = ProfileSchema.safeParse({
+    firstName: (formData.get('firstName') ?? '').toString().trim(),
+    lastName: (formData.get('lastName') ?? '').toString().trim(),
+  })
+  if (!parsed.success) return { ok: false, error: 'First and last name required (max 50 chars each).' }
 
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { name: parsed.data.name || null },
+    data: parsed.data,
   })
   revalidatePath('/account')
-  return { ok: true, message: 'Name updated.' }
+  return { ok: true, message: 'Profile updated.' }
 }
+
+const DisplayNameSchema = z
+  .object({
+    format: z.enum(['first-last', 'last-first', 'first-l', 'f-last', 'custom']),
+    custom: z.string().max(80).optional(),
+  })
+  .refine(
+    (d) => d.format !== 'custom' || (d.custom && d.custom.trim().length > 0),
+    { message: 'Custom display name cannot be empty.' },
+  )
+
+export async function updateDisplayNameAction(_prev: AccountResult | null, formData: FormData): Promise<AccountResult> {
+  const session = await auth()
+  if (!session?.user?.id) return { ok: false, error: 'Not signed in.' }
+
+  const parsed = DisplayNameSchema.safeParse({
+    format: formData.get('format'),
+    custom: (formData.get('custom') ?? '').toString().trim() || undefined,
+  })
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { firstName: true, lastName: true },
+  })
+  if (!user) return { ok: false, error: 'Account not found.' }
+
+  const name = formatDisplayName(parsed.data.format, user.firstName, user.lastName, parsed.data.custom)
+  await prisma.user.update({ where: { id: session.user.id }, data: { name } })
+  revalidatePath('/account')
+  return { ok: true, message: 'Display name updated.' }
+}
+
 
 const PasswordSchema = z.object({
   currentPassword: z.string().min(1),

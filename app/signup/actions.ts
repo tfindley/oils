@@ -8,10 +8,13 @@ import { prisma } from '@/lib/prisma'
 import { rateLimit } from '@/lib/rate-limit'
 import { sendEmail, verificationEmail } from '@/lib/email'
 
+const NAME_RE = /^[^\s].*[^\s]$|^[^\s]$/ // not empty, no leading/trailing whitespace
+
 const SignupSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(8).max(128),
-  name: z.string().min(1).max(80).optional(),
+  firstName: z.string().min(1).max(50).regex(NAME_RE, 'First name required'),
+  lastName: z.string().min(1).max(50).regex(NAME_RE, 'Last name required'),
 })
 
 export type SignupResult =
@@ -29,12 +32,13 @@ export async function signupAction(_prev: SignupResult | null, formData: FormDat
   const parsed = SignupSchema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
-    name: formData.get('name') || undefined,
+    firstName: (formData.get('firstName') ?? '').toString().trim(),
+    lastName: (formData.get('lastName') ?? '').toString().trim(),
   })
   if (!parsed.success) {
-    return { ok: false, error: 'Check your email and password (min 8 characters).' }
+    return { ok: false, error: 'Check the form — first name, last name, valid email, password (min 8 characters).' }
   }
-  const { email, password, name } = parsed.data
+  const { email, password, firstName, lastName } = parsed.data
   const normalisedEmail = email.toLowerCase()
 
   // Don't leak existence — return the same success-ish "check your email"
@@ -46,7 +50,14 @@ export async function signupAction(_prev: SignupResult | null, formData: FormDat
 
   const passwordHash = await argon2Hash(password)
   const user = await prisma.user.create({
-    data: { email: normalisedEmail, passwordHash, name: name ?? null },
+    data: {
+      email: normalisedEmail,
+      passwordHash,
+      firstName,
+      lastName,
+      // Default display name to "First Last". User can change format on /account.
+      name: `${firstName} ${lastName}`,
+    },
     select: { id: true, email: true },
   })
 

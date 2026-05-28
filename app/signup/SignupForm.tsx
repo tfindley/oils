@@ -19,9 +19,15 @@ export function SignupForm() {
 
   return (
     <form action={action} className="space-y-3">
-      <div>
-        <label htmlFor="name" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">Name (optional)</label>
-        <Input id="name" name="name" autoComplete="name" maxLength={80} />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">First name</label>
+          <Input id="firstName" name="firstName" autoComplete="given-name" required maxLength={50} />
+        </div>
+        <div>
+          <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">Last name</label>
+          <Input id="lastName" name="lastName" autoComplete="family-name" required maxLength={50} />
+        </div>
       </div>
       <div>
         <label htmlFor="email" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">Email</label>

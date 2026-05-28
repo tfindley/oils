@@ -5,11 +5,12 @@ import { verify as argon2Verify } from '@node-rs/argon2'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 
-// In dev, fall back to a stable dummy secret so the auth pages render without
-// requiring AUTH_SECRET in .env.local. In production, fail fast at startup if
-// it's not set — never accept the dev fallback there.
+// In dev (or during `next build`), fall back to a stable dummy secret so the
+// auth module loads. In real production runtime we fail fast — the build phase
+// sets NEXT_PHASE='phase-production-build', so we only throw outside that.
 if (!process.env.AUTH_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+  if (process.env.NODE_ENV === 'production' && !isBuildPhase) {
     throw new Error('AUTH_SECRET is required in production. Generate one with: openssl rand -base64 32')
   }
   process.env.AUTH_SECRET = 'dev-only-secret-do-not-use-in-production'
