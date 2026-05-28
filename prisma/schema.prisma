@@ -178,5 +178,9 @@ model Settings {
   tooltipsEnabled       Boolean  @default(true)
   issueReportingEnabled Boolean  @default(true)
   allowAnonymousSaves   Boolean  @default(true)
+  // When false, the legacy ADMIN_SECRET cookie path is rejected and
+  // /admin/login is hidden. Set to false once user-based ADMIN access is
+  // verified to working. Recoverable via FORCE_LEGACY_ADMIN_LOGIN=1 env var.
+  legacyAdminEnabled    Boolean  @default(true)
   updatedAt             DateTime @updatedAt
 }

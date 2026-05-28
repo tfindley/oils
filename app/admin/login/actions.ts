@@ -4,8 +4,17 @@ import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { rateLimit } from '@/lib/rate-limit'
 import { mintSessionToken } from '@/lib/admin-auth'
+import { getSettings } from '@/lib/settings'
 
 export async function adminLogin(_prev: unknown, data: FormData): Promise<{ error: string } | never> {
+  // Reject if legacy login is disabled — protect against direct POSTs even
+  // though the page itself 404s.
+  const settings = await getSettings().catch(() => null)
+  const forceLegacy = process.env.FORCE_LEGACY_ADMIN_LOGIN === '1'
+  if (settings && !settings.legacyAdminEnabled && !forceLegacy) {
+    return { error: 'Legacy admin login is disabled.' }
+  }
+
   const secret = process.env.ADMIN_SECRET
   const input = data.get('secret')?.toString() ?? ''
 

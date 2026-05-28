@@ -108,7 +108,8 @@ Specific version tags are also available — see [Releases](https://github.com/t
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `NEXT_PUBLIC_BASE_URL` | Yes | — | Public URL of your deployment (used in QR codes and blend share links) |
-| `ADMIN_SECRET` | Yes | — | Password for the admin panel at `/admin` |
+| `ADMIN_SECRET` | Yes | — | Password for the legacy admin login at `/admin/login`. Can be disabled via the in-app Settings toggle once you have a User-based admin account. |
+| `FORCE_LEGACY_ADMIN_LOGIN` | No | — | Emergency override. Set to `"1"` to re-enable `/admin/login` even when the Settings toggle disabled it. For recovery when user-based admin access is lost. Unset after recovery. |
 | `CRON_SECRET` | Yes | — | Bearer token for the auto-purge endpoint |
 | `NEXT_PUBLIC_SITE_NAME` | No | `Oil Blender` | Display name shown in the header, footer, page titles, and PDF |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | No | — | Google Analytics 4 measurement ID (`G-XXXXXXXXXX`); omit to disable |

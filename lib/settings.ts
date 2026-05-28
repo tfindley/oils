@@ -9,19 +9,27 @@ export interface SiteSettings {
   tooltipsEnabled: boolean
   issueReportingEnabled: boolean
   allowAnonymousSaves: boolean
+  legacyAdminEnabled: boolean
 }
 
 const DEFAULTS: SiteSettings = {
   tooltipsEnabled: true,
   issueReportingEnabled: true,
   allowAnonymousSaves: true,
+  legacyAdminEnabled: true,
 }
 
-function pick(row: { tooltipsEnabled: boolean; issueReportingEnabled: boolean; allowAnonymousSaves: boolean }): SiteSettings {
+function pick(row: {
+  tooltipsEnabled: boolean
+  issueReportingEnabled: boolean
+  allowAnonymousSaves: boolean
+  legacyAdminEnabled: boolean
+}): SiteSettings {
   return {
     tooltipsEnabled: row.tooltipsEnabled,
     issueReportingEnabled: row.issueReportingEnabled,
     allowAnonymousSaves: row.allowAnonymousSaves,
+    legacyAdminEnabled: row.legacyAdminEnabled,
   }
 }
 

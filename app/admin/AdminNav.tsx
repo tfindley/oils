@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 const NAV_LINKS = [
   { label: 'Oils', href: '/admin' },
   { label: 'Blends', href: '/admin/blends' },
+  { label: 'Users', href: '/admin/users' },
   { label: 'Database', href: '/admin/database' },
   { label: 'Settings', href: '/admin/settings' },
 ]
