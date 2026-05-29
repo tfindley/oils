@@ -41,12 +41,18 @@ DATABASE_URL="postgresql://oils:oils@localhost:5432/oils"
 NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 ADMIN_SECRET="your-strong-admin-password"
 CRON_SECRET="your-strong-cron-secret"
+AUTH_SECRET="$(openssl rand -base64 32)"        # signs Auth.js session cookies
 
 # Optional
 NEXT_PUBLIC_SITE_NAME="Oil Blender"
 NEXT_PUBLIC_GA_MEASUREMENT_ID="G-XXXXXXXXXX"   # omit to disable analytics
 ANTHROPIC_API_KEY="sk-ant-..."                  # only needed for npm run enrich
+RESEND_API_KEY=""                               # if set, real verification emails go via Resend
+SMTP_HOST=""                                    # alternative: Nodemailer SMTP
+# FORCE_LEGACY_ADMIN_LOGIN="1"                  # emergency-only — re-enables /admin/login if user-based admin access is lost
 ```
+
+> `AUTH_SECRET` has a dev fallback (`auth.ts` sets a fixed dummy when `NODE_ENV !== 'production'` and unset), so dev still works without it. Set it explicitly anyway so you don't carry the fallback into a build artifact by accident.
 
 ### 3. Start PostgreSQL
 
@@ -120,6 +126,21 @@ For staging / production deployments, set either `RESEND_API_KEY` or `SMTP_HOST`
 
 ---
 
+## First-Time Admin Bootstrap
+
+A fresh install has zero `User` accounts. The first admin is the chicken-and-egg problem; v1.2.1 ships a deliberate three-path solution:
+
+1. **Sign in via the legacy `/admin/login` form** using `ADMIN_SECRET` from your env. This is the bootstrap path — always available unless explicitly disabled.
+2. **Sign up a user account** at `/signup`. In dev with no email transport configured, the verification URL is printed to the server console (see the section above). Click through the link to flip `emailVerified`.
+3. **Promote the account** — go to `/admin/users` (still signed in via the legacy cookie), find your account, click **Promote to admin**.
+4. **Sign in as that user account** at `/login` and confirm `/admin` works.
+5. **Optional but recommended for production**: visit `/admin/settings` and turn off **Legacy admin login (ADMIN_SECRET cookie)**. From this point only `User.role === 'ADMIN'` sessions reach `/admin/*`.
+6. **Recovery**: if you ever lose user-based admin access (lost password, OAuth outage in v2+, etc.), set `FORCE_LEGACY_ADMIN_LOGIN=1` in the container env and restart. `/admin/login` reappears regardless of the Settings toggle. Unset and restart once recovered.
+
+The `purgeExempt` flag on every existing `ADMIN` row is set to `true` by the v1.3.0 migration so the inactivity-based account-purge cron never deletes a global admin. New admins promoted via `/admin/users` start with `purgeExempt = false`; toggle as needed.
+
+---
+
 ## Schema Changes
 
 1. Edit `prisma/schema.prisma`
@@ -164,11 +185,22 @@ oil-blender/
 │   │   ├── oils/           # Oil create/edit
 │   │   ├── blends/         # Blend list, edit, import/promote
 │   │   └── database/       # Seed and enrichment tools
+│   ├── signup/             # Email + password signup (v1.1.0+)
+│   ├── login/              # Sign-in form
+│   ├── logout/             # POST-only sign-out (CSRF-safe)
+│   ├── verify-email/       # Token-based email verification handler
+│   ├── forgot-password/    # Password-reset request form
+│   ├── reset-password/     # Password-reset confirm form
+│   ├── account/            # /account profile page (display-name picker, change password, delete)
+│   ├── my-blends/          # Signed-in user's saved blends
 │   └── api/                # REST API + cron routes
-│       ├── blends/         # Create / fetch blends
-│       ├── oils/           # Oil data
-│       ├── pairings/       # Pairing queries
-│       └── cron/purge/     # Auto-purge endpoint
+│       ├── auth/[...nextauth]/  # Auth.js v5 handlers
+│       ├── blends/              # Create / fetch blends (access-controlled)
+│       ├── oils/                # Oil data
+│       ├── pairings/            # Pairing queries
+│       └── cron/
+│           ├── purge/           # Anonymous blend auto-purge
+│           └── account-purge/   # Inactive-account lifecycle (warns + deletes)
 ├── components/
 │   ├── analytics/          # GoogleAnalytics component
 │   ├── ui/                 # Button, Badge, Card, Input/Textarea, Alert, CopyButton
@@ -187,7 +219,13 @@ oil-blender/
 │   ├── pairing-utils.ts    # Shared pairing key / map utilities
 │   ├── use-drag-scroll.ts  # Pointer-event drag-to-scroll hook (Compatibility Matrix)
 │   ├── oil-enrichment.ts   # Claude enrichment helper (prompt caching, truncation retry); exports ENRICHMENT_MODEL
-│   └── format-time.ts      # relativeTime(date) helper
+│   ├── format-time.ts      # relativeTime(date) helper
+│   ├── settings.ts         # SiteSettings singleton, React.cache-wrapped getSettings()
+│   ├── admin-auth.ts       # Legacy HMAC token + isAdminAuthenticated() shared helper
+│   ├── rate-limit.ts       # Namespaced IP-keyed token-bucket
+│   └── email.ts            # Three-tier email transport (Resend / SMTP / dev console) + template helpers
+├── auth.ts                 # Auth.js v5 config (Credentials provider, JWT callbacks, lastSignInAt stamping)
+├── types/next-auth.d.ts    # Session augmentation: id/role/emailVerified on session.user
 ├── scripts/
 │   ├── migrate.js          # Lightweight migration runner (uses pg, no Prisma CLI)
 │   ├── oil-definitions.ts  # Oil name list
@@ -213,9 +251,11 @@ oil-blender/
 | `GET` | `/api/oils` | List oils — `?type=ESSENTIAL\|CARRIER&q=search` |
 | `GET` | `/api/oils/[id]` | Single oil with all pairings |
 | `GET` | `/api/pairings` | `?oilIds=id1,id2,id3` — pairings between selected oils |
-| `POST` | `/api/blends` | Create blend (validates no UNSAFE pairs server-side) |
-| `GET` | `/api/blends/[id]` | Blend detail with ingredients and pairings |
-| `GET` | `/api/cron/purge` | Delete inactive blends (requires `Authorization: Bearer <CRON_SECRET>`) |
+| `POST` | `/api/blends` | Create blend (validates no UNSAFE pairs server-side; attaches `userId` when signed in; honours `Settings.allowAnonymousSaves`) |
+| `GET` | `/api/blends/[id]` | Blend detail with ingredients and pairings. Enforces the same access control as `/blend/[id]` — private owned blends return 404 to non-owners. |
+| `GET / POST` | `/api/auth/[...nextauth]` | Auth.js v5 catch-all (sign-in / callback / etc.) |
+| `GET` | `/api/cron/purge` | Delete inactive **anonymous** blends (requires `Authorization: Bearer <CRON_SECRET>`); owned blends are exempt |
+| `GET` | `/api/cron/account-purge` | Inactivity-based account lifecycle — sends 14-day and 3-day warnings then deletes (same Bearer auth) |
 
 ---
 

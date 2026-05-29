@@ -1,6 +1,7 @@
 import { getSettings } from '@/lib/settings'
 import { prisma } from '@/lib/prisma'
 import { saveSettings } from './actions'
+import { MaintenanceModeCard } from './MaintenanceModeCard'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Settings — Admin' }
@@ -89,6 +90,13 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
           </button>
         </div>
       </form>
+
+      {/* Maintenance mode lives in its own card, separate from the cosmetic
+          toggles above. It has its own action + confirmation flow because
+          engaging it takes the public site offline. */}
+      <div className="mt-6">
+        <MaintenanceModeCard initialEnabled={settings.maintenanceMode} />
+      </div>
     </div>
   )
 }

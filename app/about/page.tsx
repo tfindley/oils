@@ -97,6 +97,15 @@ export default function AboutPage() {
             'Per-oil profiles: benefits, origins, contraindications',
             'Searchable, filterable oil catalog',
             'Curated featured blends from the community',
+            'Optional user accounts with email + password sign-in',
+            'Display-name picker — show your full name, initials, a nickname, or Anonymous',
+            'Per-blend privacy: every saved blend you own can be public or private',
+            'Claim flow — link a previously-saved anonymous blend to your account',
+            'My Blends page for everything you’ve saved',
+            'Personal oil collection — track what you own (quantity, opened-on, expiry, supplier, cost)',
+            '"From my collection" filter in the blend builder — only see oils you actually have',
+            'Per-recipe shopping list — see which oils you need to buy at a glance',
+            'Expiry warnings so you know which bottles to use up first',
           ].map((f) => (
             <li key={f} className="flex items-start gap-2 text-sm text-stone-700 dark:text-stone-300">
               <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-500">✓</span>
@@ -141,22 +150,45 @@ export default function AboutPage() {
         <h2 className="mb-4 font-serif text-2xl font-semibold text-stone-800 dark:text-stone-200">Your Data &amp; Privacy</h2>
         <div className="space-y-4">
           <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-700 dark:bg-stone-800">
-            <h3 className="mb-2 font-semibold text-stone-800 dark:text-stone-200">What gets stored</h3>
+            <h3 className="mb-2 font-semibold text-stone-800 dark:text-stone-200">Saving without an account</h3>
             <div className="space-y-2 text-sm text-stone-600 dark:text-stone-400">
               <p>
-                When you save a blend, the following data is written to the database: the oils you selected,
-                their quantities and percentages, the blend name, creation timestamp, and view count. <strong>No
-                account, login, or personal information is required</strong> — the only thing linking you to a blend
-                is the URL.
+                You can save a blend without signing up. When you do, the following gets written to the database:
+                the oils you selected, their quantities and percentages, the blend name, creation timestamp,
+                and view count. <strong>No login or personal information is required</strong> — the only thing
+                linking you to the blend is its URL.
               </p>
               <p>
-                Blend data is <strong>automatically deleted after 30 days of inactivity</strong> (last time the blend
-                URL was visited). Blends that have been promoted to the curated showcase by an admin are kept
-                indefinitely.
+                Anonymous blend data is <strong>automatically deleted after 30 days of inactivity</strong> (last time
+                the blend URL was visited). Blends an admin has promoted to the curated showcase are kept indefinitely.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-700 dark:bg-stone-800">
+            <h3 className="mb-2 font-semibold text-stone-800 dark:text-stone-200">Saving with an account</h3>
+            <div className="space-y-2 text-sm text-stone-600 dark:text-stone-400">
+              <p>
+                If you sign up, we store your email, an argon2 hash of your password, your first and last name,
+                your chosen display name (which can be <em>Anonymous</em>), and the date you last signed in.
+                Your blends become attached to your account and remain available in <strong>My Blends</strong> for
+                the lifetime of the account.
               </p>
               <p>
-                There is no user tracking, no cookies set by this application, and no personal data collected
-                by the blend builder itself.
+                <strong>Each of your blends is private by default.</strong> You decide which ones to share by
+                flipping the share toggle on the blend page. Private blends are hidden from the public listings,
+                the homepage, and the API — only you can see them.
+              </p>
+              <p>
+                <strong>Account lifecycle.</strong> If you don&apos;t sign in for nearly a year, we email you a 14-day
+                warning then a 3-day warning. Signing in any time during that window resets the clock. If you
+                still don&apos;t sign in, the account and its data are deleted; any blends you marked shared remain
+                accessible via their URLs as anonymous blends for up to 30 more days before they too are auto-removed.
+              </p>
+              <p>
+                <strong>You can delete your account at any time</strong> from the <code className="font-mono">/account</code>
+                page. Deletion cascades: sessions and provider links are dropped immediately; saved blends become
+                anonymous so their URLs keep working (subject to the 30-day anonymous purge thereafter).
               </p>
             </div>
           </div>
@@ -220,6 +252,9 @@ export default function AboutPage() {
             { name: 'Tailwind CSS 4', role: 'Styling', url: 'https://tailwindcss.com' },
             { name: '@react-pdf/renderer', role: 'Client-side PDF generation', url: 'https://react-pdf.org' },
             { name: 'Zod', role: 'API validation', url: 'https://zod.dev' },
+            { name: 'Auth.js v5', role: 'User authentication (sign-up, sign-in, password reset)', url: 'https://authjs.dev' },
+            { name: '@node-rs/argon2', role: 'Password hashing (argon2id)', url: 'https://github.com/napi-rs/node-rs/tree/main/packages/argon2' },
+            { name: 'Resend / Nodemailer', role: 'Transactional email (verify, password reset, lifecycle warnings)', url: 'https://resend.com' },
             { name: 'Anthropic Claude', role: 'Data enrichment (AI)', url: 'https://anthropic.com' },
             { name: 'Google Analytics 4', role: 'Anonymised usage analytics (optional)', url: 'https://marketingplatform.google.com/about/analytics/' },
             { name: 'GitHub Actions', role: 'CI/CD + container registry', url: 'https://github.com/features/actions' },

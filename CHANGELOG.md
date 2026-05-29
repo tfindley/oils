@@ -4,6 +4,126 @@ All notable changes to Potions & Lotions are documented here.
 
 ## [Unreleased]
 
+Four accumulated phases on the `v1.2` branch toward a multi-user release. Phases stack additively — nothing prior breaks; anonymous saves keep working unchanged.
+
+### Added
+
+#### v1.4.x — Polish from real-use feedback
+
+- **No accidental remove from the oil browser.** The "🛒 In my collection" button on `/oils/[id]` no longer toggles off on click — it became a **🛒 In my collection — view** link to `/my-collection#oil-<id>`. Removing an oil now only happens explicitly from the collection page itself. The anchor jumps you to the row AND auto-opens its edit form.
+- **Per-user currency** (ISO 4217). New `User.currency` column, defaults to `GBP` for back-compat. **/account → Profile** gets a Currency dropdown covering GBP, EUR, USD, CAD, AUD, NZD, CHF, SEK, NOK, DKK, JPY, INR. Costs throughout `/my-collection` now format via `Intl.NumberFormat` using the user's chosen currency — Belgian users see €, Japanese users see ¥, etc. Switching currency doesn't convert existing values; the user re-enters them.
+- **Bottle size as cost context** — new `UserOilCollection.bottleSizeMl` column. The collection edit form gains a **Bottle size (ml)** field next to **Price paid**, and the row summary renders them together: "€12.50 for 30 ml" instead of a contextless "€12.50". Lays groundwork for future cost-per-blend computations (`cost / bottleSizeMl × usedMl`).
+- New shared helper [lib/currency.ts](lib/currency.ts) — `CURRENCIES`, `formatCurrency()`, `isSupportedCurrency()`, `DEFAULT_CURRENCY`. Adding a currency to the dropdown is one entry in `CURRENCIES`; nothing else changes.
+
+### Fixed
+
+- **`/account` profile form fields reverted on save.** React 19 resets uncontrolled form fields after a server action completes; combined with `revalidatePath()` not propagating the new prop to the same render cycle, the currency `<select>` appeared to flip back to its previous value even though the DB was updated. Converted firstName / lastName / currency to controlled inputs with `useEffect` prop-sync — the user's selection now survives the post-action reset, and a later server re-render still wins.
+
+#### v1.4.x — Operator maintenance mode + JWT-callback hardening
+
+- **`Settings.maintenanceMode` operator kill-switch.** When on, `proxy.ts` rewrites all public requests to a friendly `/maintenance` page; `/admin/*` stays reachable so the operator can flip it back off. `/api/auth/*` and `/api/cron/*` are exempt (Auth.js handlers and bearer-auth'd cron jobs keep functioning). Public `/api/*` requests get a 503 JSON with `Retry-After` instead of an HTML rewrite.
+- **Dedicated `MaintenanceModeCard`** on `/admin/settings` — separated from the cosmetic toggles, has its own action (`toggleMaintenanceModeAction`), a JS `confirm()` dialog before engagement (because clicking on accident takes the site offline), three expandable info panels ("what does maintenance mode do?" / "how do I access the site once engaged?" / "how do I disable it afterwards?"), and a status banner showing the current state. Saving the cosmetic-toggles form no longer touches `maintenanceMode` so the two flows can't accidentally collide.
+- **Hardened `auth.ts` JWT callback.** The `lastSignInAt` stamping is now wrapped in `try/catch`; if the update fails (schema drift, transient DB blip), the callback falls through to a read-only `findUnique` so the user can still sign in. Previously a missing v1.3.0 column would surface to the user as a misleading "Email or password incorrect" error.
+- **`proxy.ts` matcher broadened** to cover the whole site (with explicit exemptions for `_next/static`, `_next/image`, `_next/data`, favicons, manifest, robots.txt, sitemap, common asset icons). The admin-gating logic stays scoped to `/admin/*` only.
+
+#### v1.4.0 — Personal oil collection
+
+- **New `UserOilCollection` Prisma model** — per-user oil inventory with optional quantity (ml), opened-at, expires-at, supplier, cost, batch number, and freeform notes. `@@unique([userId, oilId])` blocks duplicates; FK is `ON DELETE CASCADE` from User, `RESTRICT` from Oil.
+- **`/my-collection` page** — list/grid of the user's oils with inline edit (quantity / opened / expiry / supplier / cost / batch / notes), expiry badges, type filter (All / Carriers / Essentials), search across name + supplier + batch + notes.
+- **Stats strip** at the top: Total oils (with carrier / essential split), Total spend (sum of `cost`), Expiring soon (within 30 days), Library coverage.
+- **Expiry detection**: explicit `expiresAt` wins; otherwise derived from `openedAt + Oil.shelfLifeMonths` (carriers only). Anything ≤30 days from expiry gets an amber badge; past-expiry gets a red badge.
+- **"Add to my collection" / "🛒 In my collection" toggle button** on every `/oils/[id]` page, next to Add-to-Blend / Add-to-Compare. Signed-out users see a "Sign in to track" CTA instead.
+- **"From my collection" filter chip** in the blend builder's oil picker (both Carriers and Essentials tabs). Renders only when the user has at least one oil of that type in their collection. Lets you build blends scoped to oils you actually own — the killer feature of having a collection.
+- **Shopping list card** on every `/blend/[id]` recipe page for signed-in viewers: shows which of the blend's oils you don't own yet, with a per-oil "Buy ↗" link (uses `Oil.buyUrl`). Includes a "You have X of Y in this recipe" footer. Hidden entirely when you own everything (replaced by a ✓ note).
+- **Nav**: "My Collection" link in the avatar dropdown and mobile menu, alongside My Blends.
+
+#### v1.1.0 — Auth foundation
+
+- **Auth.js v5 + Prisma adapter** wired up with JWT sessions (required by the Credentials provider).
+- **Email + password signup** at `/signup` with first-name + last-name required (1–50 chars, no leading/trailing whitespace). User.name defaults to `"First Last"` on creation; the format is editable on `/account`.
+- **Email verification** via `/verify-email?token=…`; tokens are hex-64, single-use, 24-hour TTL; success redirects to `/login?verified=1` (the email address is intentionally NOT carried in the URL so it doesn't leak via browser history or Referer).
+- **Sign in / sign out** at `/login` and `/logout`; `/logout` is **POST-only** (CSRF-safe; UserMenu posts via a `<form>`). Login surfaces `verified=1`, `passwordChanged=1`, `check=email`, and token-error flags.
+- **Forgot / reset password** at `/forgot-password` and `/reset-password?token=…` with anti-enumeration (silent-ok responses).
+- **Account page** at `/account` with editable first/last name, display-name picker, change-password (current + new), and delete-account.
+- **Display-name picker** with five presets: `First Last`, `Last, First`, `First L.`, `F. Last`, **Anonymous** (always available), plus Custom/nickname. Pre-selects the matching preset on render; rendered choice is what shows as the "by …" line on every blend.
+- **Email transport (`lib/email.ts`) — three-tier**: Resend (if `RESEND_API_KEY` is set), Nodemailer SMTP (if `SMTP_HOST` is set), or dev-console fallback in non-prod. Production throws if neither real transport is configured.
+- **Rate limiting** on signup (3/hour/IP) and password reset (3/day/email).
+- **Header & nav**: session-aware. Logged-out users see Sign in / Sign up; logged-in users get an avatar dropdown with My Blends, Account settings, Sign out, and an ⚙ Admin panel link when `role === 'ADMIN'`. Mobile menu mirrors all of it.
+
+#### v1.2.0 — Blend ownership
+
+- **`Blend.userId`** (nullable FK, ON DELETE SET NULL — deleted users' blends become anonymous instead of dropping).
+- **`Blend.isShared`** (default `false` for owned blends; anonymous blends ignore it).
+- **`Settings.allowAnonymousSaves`** admin toggle (default on; turn off to require sign-in before saving).
+- **POST /api/blends** attaches `userId` for authed saves, gates anonymous saves on the Settings flag.
+- **`/blend/[id]` access control**: anonymous blends are public by URL; owned blends are public only when `isShared` is true OR the viewer is the owner. Non-owners hitting a private blend get a 404 with no existence leak.
+- **`/my-blends`** page lists the current user's saved blends.
+- **Owner share toggle** on the blend detail page — flip a saved blend public/private.
+- **Claim flow** for users who saved a blend anonymously before signing up — URL-only auth; a logged-in user viewing an unowned blend can claim it (atomic `updateMany` scoped to `userId: null`, so concurrent claims can't both win).
+
+#### v1.2.1 — Admin user management + legacy admin login toggle
+
+- **`/admin/users`** — list + search (email, name, first/last); per-row Promote / Demote / Mark verified / Make exempt / Delete; lockout guards refuse to demote or delete the last remaining `ADMIN`.
+- **Legacy admin login kill switch** — once a `User`-account holds `ADMIN`, the admin can disable the `/admin/login` cookie path from **Site Settings**. The proxy then accepts only `ADMIN`-role sessions. The Settings page itself blocks disabling when zero admins exist.
+- **`FORCE_LEGACY_ADMIN_LOGIN=1`** emergency env override re-enables `/admin/login` if user-based admin access is ever lost.
+- **`proxy.ts`** accepts three paths into `/admin/*`: ADMIN-role JWT, legacy cookie (when allowed), or the login form itself.
+- **`isAdminAuthenticated()` helper** in `lib/admin-auth.ts` — single source of truth for the three-path gate, used by admin server actions for defence-in-depth.
+
+#### v1.3.0 — Account lifecycle + admin user stats
+
+- **`/api/cron/account-purge`** (daily) — inactive-account purge with a warning trail. Users inactive ≥ 1y − 14d get a first warning; ≥ 1y − 3d get a final warning; ≥ 1y get deleted. Cascade: sessions/accounts drop; blends become anonymous (FK `SET NULL`). "Activity" = `lastSignInAt` if set, else `createdAt`.
+- **Sign-in resets the inactivity clock** — Auth.js JWT callback stamps `User.lastSignInAt = now()` AND clears both warning timestamps on every sign-in, so any sign-in within the window saves the account.
+- **Inactivity warning email** (`lib/email.ts`) — same template for both warnings, day count interpolated.
+- **`User.purgeExempt`** boolean (paid-tier hook now, useful for admin accounts immediately). Migration sets `purgeExempt = true` for all existing `ADMIN` users.
+- **Admin Users page stats strip** — Total / Admins / Verified / Purge-exempt / Warned (amber-highlighted when >0) / Total blends. Always-visible context at the top of `/admin/users`.
+- **Admin Users list** new columns: **Last sign-in** (relative time, "never" if null) and **Status** (🛡 Exempt / ⚠ Warned / ⚠ final badges). New **Make exempt / 🛡 Exempt** per-row toggle.
+- **Owned blends are never auto-purged** — the existing `/api/cron/purge` (anonymous blend cleanup) now filters `userId: null`, so an account's saved blends persist for the lifetime of the account.
+
+### Changed
+
+- **Admin Blends list** (`/admin/blends`) — the Author column became **Owner / Display**, showing the owner's email (monospace, always shown for owned blends; `(anonymous save)` for legacy `userId=null` blends) above the public display name. Search now matches email + display name + legacy author name.
+- **Admin Users list** desktop table header — the previously-duplicate `<th>Email</th>` second column now correctly says `Verified`.
+- **Admin "Sign Out"** in the admin nav now signs out the NextAuth session in addition to clearing the legacy cookie, so ADMIN-role users don't get a redirect loop back to `/admin`.
+
+### Fixed
+
+- **Blend save form persisted the blend name across sessions.** On successful save, `BlendBuilder` cleared the draft from localStorage, but the post-save `oil-blender:draft-changed` cascade re-emptied React state in a way that retriggered the auto-save effect with `blendName` still set. The auto-save then wrote `{ carriers: [], essentials: [], blendName: 'Test' }` back to localStorage; the next visit to `/blend` re-hydrated the name. Two-part fix: the empty-check is now oils-only (a name without oils is not a blend), and `handleSave` resets `blendName`/`blendNotes` to `''` before navigation.
+
+### Security
+
+A `/simplify --fix` review pass on the v1.2 branch surfaced and fixed 14 issues before they shipped. None reached `main`; all were caught in the staging branch. Highlights:
+
+- **`GET /api/blends/[id]` lacked access control.** Anyone with a blend ID could fetch the full recipe of a private (owned, `isShared=false`) blend via the JSON API even though the page route 404'd. Fixed by mirroring the page-route check at the API layer.
+- **`/blend?from=<id>` lacked access control.** The "Build from this blend" clone path loaded any blend's volume / dilution / ingredients into the builder without checking ownership or share state. Fixed.
+- **Admin server actions (promote/demote/verify/delete user, save settings) had no in-action role check** — they relied entirely on path-based proxy gating. Now each action calls `isAdminAuthenticated()` and bails on `false` (defence-in-depth against any future code path that bypasses the proxy matcher).
+- **`/api/cron/purge` deleted user-owned blends** (would have silently destroyed saved blends after 30 days inactivity). Now filters `userId: null`.
+- **`deleteAccountAction` had no last-admin lockout** (sole admin could self-delete via `/account` and lock the site out of admin). Mirrored the `/admin/users` guard.
+- **`claimBlendAction` was TOCTOU.** Concurrent Claim clicks on the same anonymous blend could both pass the `userId === null` check; the second update would overwrite the first owner. Fixed by switching to an atomic `updateMany` scoped to `userId: null`.
+- **`/admin/logout` only cleared the legacy admin_token cookie** — ADMIN-role JWT users got a redirect loop back to `/admin`. Now also calls `signOut()`.
+- **Public blend listings (`/blends`, homepage)** had no `isShared` filter — an owned-private blend with `viewCount >= 5` or `isFeatured=true` would leak into the public grid. Added `OR: [userId: null, isShared: true]` to both.
+- **Verified email address leaked in `/login?verified=1&email=…` URL** after verification. Dropped the email param.
+- **GET-based `/logout` was CSRF-vulnerable** (cross-origin `<img src="/logout">`). Now POST-only.
+- **Fail-open legacy admin gate.** `legacyAllowed = forceLegacy || settings?.legacyAdminEnabled !== false` evaluated to `true` when `getSettings()` errored and returned `null` (because `undefined !== false`). Fixed to fail-closed `=== true` in `proxy.ts`, `app/admin/layout.tsx`, and `app/admin/login/actions.ts`.
+- **Dead `if (!secret) redirect('/admin')` branch** in `/admin/login/actions.ts` left over from the removed proxy escape hatch — would have created an infinite redirect loop in dev. Now returns an explicit error.
+- **Duplicate `<th>Email</th>` column header** in the admin user list desktop table; the second one is meant to be `Verified`. Fixed.
+
+A subsequent `/security-review` deep-dive on the patched branch found **zero new HIGH/MEDIUM-severity vulnerabilities**.
+
+### Schema
+
+Four additive migrations on the v1.2 branch:
+
+| Migration | What changed |
+|-----------|-------------|
+| `20260526000000_v11_auth_foundation` | `User`, `Session`, `Account`, `VerificationToken` models per Auth.js v5 + Prisma adapter; `UserRole` enum |
+| `20260526000001_user_firstname_lastname` | `User.firstName`, `User.lastName` (NOT NULL DEFAULT '') |
+| `20260526000002_v12_blend_ownership` | `Blend.userId` (nullable, ON DELETE SET NULL); `Blend.isShared`; `Settings.allowAnonymousSaves` |
+| `20260526000003_settings_legacy_admin_toggle` | `Settings.legacyAdminEnabled` (default true) |
+| `20260529000000_user_lifecycle` | `User.lastSignInAt` (indexed), `User.purgeExempt`, `User.purgeWarningSentAt`, `User.purgeFinalWarningSentAt`; backfills `purgeExempt = true` for existing ADMINs |
+| `20260530000000_user_oil_collection` | New `UserOilCollection` table: per-user inventory of owned oils with quantity/opened/expiry/supplier/cost/batch/notes. `@@unique([userId, oilId])`. ON DELETE CASCADE from User, RESTRICT from Oil. |
+| `20260530000001_settings_maintenance_mode` | Added `Settings.maintenanceMode` (default `false`) — operator kill-switch for taking the public site offline. |
+| `20260530000002_currency_and_bottle_size` | Added `User.currency` (TEXT NOT NULL DEFAULT 'GBP') and `UserOilCollection.bottleSizeMl` (FLOAT?) — per-user currency preference + bottle-size context for cost. |
+
 ## [1.0.0] — 2026-05-26
 
 🎉 **First stable release.** No new code in this release — just a deliberate commitment to API stability.

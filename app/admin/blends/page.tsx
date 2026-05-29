@@ -19,6 +19,9 @@ export default async function AdminBlendsPage() {
       isFeatured: true,
       isPinned: true,
       isHidden: true,
+      // Owner info — email is the canonical identifier in the admin list;
+      // user.name is what gets shown publicly on /blend/[id].
+      user: { select: { email: true, name: true } },
       _count: { select: { ingredients: true } },
     },
     orderBy: { createdAt: 'desc' },

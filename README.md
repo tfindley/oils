@@ -17,7 +17,7 @@ Oil Blender lets you:
 - **See compatibility live** — every oil pair is rated Excellent / Good / Caution / Avoid / Unsafe
 - **Get exact quantities** — carriers in ml, essential oils in drops; additive carrier model (100 ml carrier + 3% EOs = 103 ml final)
 - **Download a PDF recipe card** — with ingredients, oil profiles, pairing notes, and a QR code
-- **Share your blend** — every saved blend gets a permanent URL
+- **Save anonymously or with an account** — anonymous saves get a public URL forever; signed-in users get `/my-blends` with per-blend privacy toggles
 - **Browse curated blends** — featured community blends on the homepage and `/blends`
 
 ---
@@ -41,11 +41,14 @@ Oil Blender lets you:
 | Shareable URLs | Persistent `/blend/[id]` URL for every saved blend |
 | View tracking | Each blend page visit increments a view counter |
 | Featured blends | Admin-curated blends shown on homepage and `/blends` listing |
-| Auto-purge | Non-featured blends inactive for 30+ days are automatically deleted |
+| Auto-purge | **Anonymous** blends inactive for 30+ days are automatically deleted; owned blends persist for the lifetime of the account |
 | Oil library | 55 oils (30 essential + 25 carrier) with botanical names, origins, benefits, contraindications |
 | Oil catalogue | Searchable, filterable by type (carrier / essential) |
 | Oil detail pages | Full profiles with all pairings listed; one-click add to blend or compare |
-| Admin panel | Manage oils and blends without touching the database directly |
+| **User accounts** | Email + password signup with verification, password reset, display-name picker (incl. **Anonymous**); private/public per-blend toggle; "claim this blend" flow for anonymously-saved blends |
+| **Account lifecycle** | Inactive accounts (no sign-in for 1 year) get two warning emails (14 days, 3 days), then are deleted. Signing in any time resets the clock. Per-user purge-exempt flag for admins (and future paid tier). |
+| **Personal oil collection** | Per-user inventory with quantity, opened date, expiry, supplier, cost, batch number, notes. `/my-collection` page with stats strip (spend, expiring soon). Powers the "From my collection" filter in the blend builder and the **shopping list** on every recipe page ("you own X, need to buy Y" with one-click buy links). |
+| Admin panel | Manage oils, blends, users, and site settings without touching the database directly. Two routes into `/admin/*`: an `ADMIN`-role user account, or the legacy `ADMIN_SECRET` cookie (toggleable kill switch once you've promoted a user) |
 
 ---
 
@@ -125,11 +128,35 @@ Specific version tags are also available — see [Releases](https://github.com/t
 
 ## Admin Panel
 
-The admin panel is at `/admin`, protected by `ADMIN_SECRET`.
+The admin panel is at `/admin`. Two ways in:
+
+1. **A `User` account with `role = 'ADMIN'`** (the path forward). Sign in at `/login` with the account's email + password; the ⚙ Admin panel link appears in your avatar dropdown.
+2. **The legacy `ADMIN_SECRET` cookie** at `/admin/login`. Bootstrap path — get into `/admin/users` and promote a user account to `ADMIN` once. The legacy path can then be disabled in **Site Settings**. See [First-time admin bootstrap](#first-time-admin-bootstrap) below.
+
+### First-time admin bootstrap
+
+On a fresh install there are no user accounts. Sequence:
+
+1. Sign in via `/admin/login` with your `ADMIN_SECRET`.
+2. Sign up a regular account at `/signup`. Verify the email link (in dev, look in the server console — see [DEVELOPMENT.md](docs/DEVELOPMENT.md#local-email-in-dev-signup-verification-password-reset)).
+3. Back in `/admin/users`, click **Promote to admin** on your account.
+4. (Optional) Sign in as that account at `/login` and confirm `/admin` works. Toggle **Site Settings → Legacy admin login (ADMIN_SECRET cookie)** off. `/admin/login` now returns 404 and the cookie path is rejected.
+5. If you ever lose user-based admin access, set `FORCE_LEGACY_ADMIN_LOGIN=1` in the container env and restart to re-enable `/admin/login` for recovery. Unset after.
 
 ### Oil management
 
 `/admin` lists all oils. From here you can create new oils or edit existing ones (name, description, benefits, pairings, image URL, buy link, etc.).
+
+### User management
+
+`/admin/users` lists all users with a stats strip (Total / Admins / Verified / Purge-exempt / Warned / Total blends) and per-row actions:
+
+- **Promote to admin** / **Demote** — flip the `role`. The page refuses to demote the last remaining `ADMIN`.
+- **Mark verified** — manually set `emailVerified` (skip the email round-trip for a known user).
+- **Make exempt** / **🛡 Exempt** — opt the user out of the annual inactivity purge. Set automatically for all existing ADMINs at migration time; toggleable per user thereafter.
+- **Delete** — cascades sessions/accounts; blends become anonymous via `FK SET NULL`. Refuses to delete the last `ADMIN`.
+
+Search matches email, display name, and first/last name. The list also surfaces **Last sign-in** as a relative time ("3 days ago", "never") and a **Status** column with badges (🛡 Exempt / ⚠ Warned / ⚠ final warning sent).
 
 ### Database tools
 
@@ -141,10 +168,22 @@ The admin panel is at `/admin`, protected by `ADMIN_SECRET`.
 
 ### Blend management
 
-`/admin/blends` lists all blends with view counts, grade, creation date, and feature flags. From here you can:
+`/admin/blends` lists all blends with view counts, grade, creation date, and feature flags. The **Owner / Display** column shows the owner's email (canonical identifier; `(anonymous save)` for legacy `userId=null` blends) above the public display name. Search matches email, display name, legacy author name, and the blend ID/URL. From here you can:
+
 - Delete a single blend
 - Select multiple blends and delete them in bulk
 - Delete all non-featured blends in one action
+- Click into a row to edit author name, about text, and feature flags
+
+### Site Settings
+
+`/admin/settings` exposes five toggles:
+
+- **Help tooltips** — site-wide hint banners on `/blend`, `/oils/compare`, etc.
+- **Footer issue-reporting link** — the "Report it on GitHub" line in the footer.
+- **Allow anonymous blend saves** — default on. Turn off to require a sign-in before saving (useful if you want to attribute every blend).
+- **Legacy admin login (ADMIN_SECRET cookie)** — default on. Once you've promoted a user to `ADMIN` and confirmed you can reach `/admin` via that account, turn this off to close the legacy path. The toggle is disabled when there are zero `ADMIN` users (the UI prevents you from locking yourself out).
+- **Maintenance mode** — default off. Operator kill-switch with its own dedicated card on `/admin/settings` (separate from the cosmetic toggles so it can't be enabled accidentally). Engaging it pops a JS confirm dialog; the card includes expandable explanations of what it does, how to reach the site while it's engaged, and how to disable it afterwards. When on, public visitors see a friendly `/maintenance` page; `/admin/*`, `/api/auth/*` and `/api/cron/*` stay reachable; public `/api/*` requests get a 503 JSON instead of HTML.
 
 ### Promoting a blend to the showcase
 
@@ -163,16 +202,21 @@ Feature flags:
 
 ## Auto-Purge
 
-Non-featured blends that haven't been visited for 30 days are automatically deleted. Trigger via an authenticated HTTP endpoint.
+Two background jobs run on the same `CRON_SECRET`:
 
-### Endpoint
+1. **Anonymous blend purge** — non-featured blends with no owner that haven't been visited for 30 days. Owned blends (`Blend.userId` set) are exempt for the life of the account.
+2. **Inactive account purge** — user accounts whose last sign-in (or signup date, if they never signed in) was more than 1 year ago. Two warning emails go out first: 14 days and 3 days before deletion. Signing in any time resets the clock and clears any pending warning. Per-user `purgeExempt` toggle in **Admin → Users** opts an account out unconditionally.
+
+### Endpoints
 
 ```
-GET /api/cron/purge
+GET /api/cron/purge             — anonymous blend purge (daily)
+GET /api/cron/account-purge     — inactive account purge (daily)
 Authorization: Bearer <CRON_SECRET>
 ```
 
-Returns `{ "deleted": 3, "message": "Purged 3 inactive blend(s)" }`.
+Blend purge returns `{ "deleted": 3, "message": "Purged 3 inactive blend(s)" }`.
+Account purge returns `{ "firstWarnSent": 1, "finalWarnSent": 0, "deleted": 0, "message": "..." }`.
 
 ### Scheduling on the host
 
@@ -226,10 +270,13 @@ A successful run shows `{"deleted":N,"message":"Purged N inactive blend(s)"}` in
 #### Option B — classic cron
 
 ```cron
-0 3 * * *  curl -sf -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/purge
+0  3 * * *  curl -sf -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/purge
+30 3 * * *  curl -sf -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/account-purge
 ```
 
 If your host doesn't have a cron daemon, install one (`sudo apt install cron && sudo systemctl enable --now cron` on Debian/Ubuntu).
+
+For systemd, copy the blend-purge unit + timer pair above and create a matching `oil-blender-account-purge.{service,timer}` pointing at `/api/cron/account-purge` on a different time (e.g. `OnCalendar=*-*-* 03:30:00`). Same `EnvironmentFile`, same `CRON_SECRET`.
 
 ---
 

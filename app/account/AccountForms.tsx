@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState, useMemo, useState, useTransition } from 'react'
+import { useActionState, useEffect, useMemo, useState, useTransition } from 'react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { CURRENCIES } from '@/lib/currency'
 import {
   updateProfileAction,
   updateDisplayNameAction,
@@ -12,20 +13,76 @@ import {
 } from './actions'
 import { formatDisplayName, type DisplayFormat } from './display-name'
 
-export function ProfileForm({ firstName, lastName }: { firstName: string; lastName: string }) {
+export function ProfileForm({
+  firstName,
+  lastName,
+  currency,
+}: {
+  firstName: string
+  lastName: string
+  currency: string
+}) {
   const [state, action, pending] = useActionState<AccountResult | null, FormData>(updateProfileAction, null)
+
+  // Controlled fields. React 19 resets uncontrolled form fields after a
+  // server action completes — which made the currency `<select>` appear to
+  // revert to its previous value on save, even though the DB was updated.
+  // Local state survives the reset; useEffect syncs from props when the
+  // server re-renders with the saved value, so the visible UI tracks DB.
+  const [firstNameValue, setFirstNameValue] = useState(firstName)
+  const [lastNameValue, setLastNameValue] = useState(lastName)
+  const [currencyValue, setCurrencyValue] = useState(currency)
+
+  useEffect(() => { setFirstNameValue(firstName) }, [firstName])
+  useEffect(() => { setLastNameValue(lastName) }, [lastName])
+  useEffect(() => { setCurrencyValue(currency) }, [currency])
 
   return (
     <form action={action} className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="firstName" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">First name</label>
-          <Input id="firstName" name="firstName" defaultValue={firstName} required maxLength={50} autoComplete="given-name" />
+          <Input
+            id="firstName"
+            name="firstName"
+            value={firstNameValue}
+            onChange={(e) => setFirstNameValue(e.target.value)}
+            required
+            maxLength={50}
+            autoComplete="given-name"
+          />
         </div>
         <div>
           <label htmlFor="lastName" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">Last name</label>
-          <Input id="lastName" name="lastName" defaultValue={lastName} required maxLength={50} autoComplete="family-name" />
+          <Input
+            id="lastName"
+            name="lastName"
+            value={lastNameValue}
+            onChange={(e) => setLastNameValue(e.target.value)}
+            required
+            maxLength={50}
+            autoComplete="family-name"
+          />
         </div>
+      </div>
+      <div>
+        <label htmlFor="currency" className="mb-1 block text-sm font-medium text-stone-700 dark:text-stone-300">Currency</label>
+        <select
+          id="currency"
+          name="currency"
+          value={currencyValue}
+          onChange={(e) => setCurrencyValue(e.target.value)}
+          className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-base sm:text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-600 dark:bg-stone-700 dark:text-stone-100"
+        >
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+          Used when displaying the cost field in your oil collection. Switching currency does not convert existing values — re-enter them in your new currency if needed.
+        </p>
       </div>
       {state && (
         <p className={`text-sm ${state.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
@@ -40,6 +97,7 @@ export function ProfileForm({ firstName, lastName }: { firstName: string; lastNa
 // Detect which preset matches the current display name so the picker is
 // pre-selected correctly when the page first renders.
 function detectFormat(currentName: string, firstName: string, lastName: string): DisplayFormat {
+  if (currentName === formatDisplayName('anonymous', firstName, lastName)) return 'anonymous'
   if (!firstName || !lastName) return 'custom'
   if (currentName === formatDisplayName('first-last', firstName, lastName)) return 'first-last'
   if (currentName === formatDisplayName('last-first', firstName, lastName)) return 'last-first'
@@ -62,7 +120,7 @@ export function DisplayNameForm({
   const [format, setFormat] = useState<DisplayFormat>(initialFormat)
   const [custom, setCustom] = useState(initialFormat === 'custom' ? currentName : '')
 
-  const presets: Array<{ id: DisplayFormat; preview: string }> = firstName && lastName
+  const namePresets: Array<{ id: DisplayFormat; preview: string }> = firstName && lastName
     ? [
         { id: 'first-last', preview: formatDisplayName('first-last', firstName, lastName) },
         { id: 'last-first', preview: formatDisplayName('last-first', firstName, lastName) },
@@ -75,56 +133,70 @@ export function DisplayNameForm({
     <form action={action} className="space-y-3">
       <input type="hidden" name="format" value={format} />
 
-      {presets.length > 0 ? (
-        <fieldset className="space-y-2">
-          <legend className="sr-only">Display name format</legend>
-          {presets.map((p) => (
-            <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-stone-200 px-3 py-2 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-700/50">
-              <input
-                type="radio"
-                name="format-radio"
-                value={p.id}
-                checked={format === p.id}
-                onChange={() => setFormat(p.id)}
-                className="h-4 w-4"
-              />
-              <span className="text-sm text-stone-800 dark:text-stone-200">{p.preview}</span>
-            </label>
-          ))}
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-stone-200 px-3 py-2 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-700/50">
+      <fieldset className="space-y-2">
+        <legend className="sr-only">Display name format</legend>
+
+        {namePresets.length === 0 && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            Set your first and last name above to enable name-based formats. You can still pick Anonymous or a custom display name.
+          </p>
+        )}
+
+        {namePresets.map((p) => (
+          <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-stone-200 px-3 py-2 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-700/50">
             <input
               type="radio"
               name="format-radio"
-              value="custom"
-              checked={format === 'custom'}
-              onChange={() => setFormat('custom')}
-              className="mt-2 h-4 w-4"
+              value={p.id}
+              checked={format === p.id}
+              onChange={() => setFormat(p.id)}
+              className="h-4 w-4"
             />
-            <div className="flex-1">
-              <span className="text-sm text-stone-800 dark:text-stone-200">Custom / nickname</span>
-              <Input
-                name="custom"
-                value={custom}
-                onChange={(e) => { setCustom(e.target.value); setFormat('custom') }}
-                placeholder="e.g. Tris, T.F., or whatever you like"
-                maxLength={80}
-                className="mt-2"
-              />
-            </div>
+            <span className="text-sm text-stone-800 dark:text-stone-200">{p.preview}</span>
           </label>
-        </fieldset>
-      ) : (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          Set your first and last name above before picking a display name format.
-        </p>
-      )}
+        ))}
+
+        <label className="flex cursor-pointer items-center gap-3 rounded-md border border-stone-200 px-3 py-2 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-700/50">
+          <input
+            type="radio"
+            name="format-radio"
+            value="anonymous"
+            checked={format === 'anonymous'}
+            onChange={() => setFormat('anonymous')}
+            className="h-4 w-4"
+          />
+          <span className="text-sm text-stone-800 dark:text-stone-200">Anonymous</span>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-stone-200 px-3 py-2 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-700/50">
+          <input
+            type="radio"
+            name="format-radio"
+            value="custom"
+            checked={format === 'custom'}
+            onChange={() => setFormat('custom')}
+            className="mt-2 h-4 w-4"
+          />
+          <div className="flex-1">
+            <span className="text-sm text-stone-800 dark:text-stone-200">Custom / nickname</span>
+            <Input
+              name="custom"
+              value={custom}
+              onChange={(e) => { setCustom(e.target.value); setFormat('custom') }}
+              placeholder="e.g. Tris, T.F., or whatever you like"
+              maxLength={80}
+              className="mt-2"
+            />
+          </div>
+        </label>
+      </fieldset>
 
       {state && (
         <p className={`text-sm ${state.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
           {state.ok ? state.message : state.error}
         </p>
       )}
-      <Button type="submit" disabled={pending || presets.length === 0}>
+      <Button type="submit" disabled={pending}>
         {pending ? 'Saving…' : 'Save display name'}
       </Button>
     </form>

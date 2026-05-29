@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { BlendBuilder } from '@/components/blend/BlendBuilder'
 import { getSettings } from '@/lib/settings'
+import { auth } from '@/auth'
 import type { OilSummary } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -27,12 +28,14 @@ export default async function BlendPage({ searchParams }: { searchParams: Promis
   const { from, oil: pendingOilId } = await searchParams
   const { tooltipsEnabled } = await getSettings()
 
-  const [oils, fromBlendData] = await Promise.all([
+  const [oils, fromBlendRaw, session] = await Promise.all([
     prisma.oil.findMany({ select: OIL_SELECT, orderBy: { name: 'asc' } }),
     from
       ? prisma.blend.findUnique({
           where: { id: from },
           select: {
+            userId: true,
+            isShared: true,
             totalVolumeMl: true,
             dilutionRate: true,
             ingredients: {
@@ -45,7 +48,31 @@ export default async function BlendPage({ searchParams }: { searchParams: Promis
           },
         })
       : Promise.resolve(null),
+    auth().catch(() => null),
   ])
+
+  // v1.4: fetch the signed-in user's collection oil IDs so the builder can
+  // render a "From my collection" filter in each picker. Empty for guests.
+  const collectionOilIds = session?.user?.id
+    ? (
+        await prisma.userOilCollection.findMany({
+          where: { userId: session.user.id },
+          select: { oilId: true },
+        })
+      ).map((r) => r.oilId)
+    : []
+
+  // Apply blend access control to the clone source — same rule as /blend/[id]:
+  // anonymous (userId null) is public by URL; owned blends require isShared OR
+  // viewer is the owner. Mismatch ⇒ silently drop the prefill.
+  const viewerId = session?.user?.id ?? null
+  const fromBlendData =
+    fromBlendRaw &&
+    (fromBlendRaw.userId === null ||
+      fromBlendRaw.isShared ||
+      fromBlendRaw.userId === viewerId)
+      ? fromBlendRaw
+      : null
 
   const carriers = oils.filter((o) => o.type === 'CARRIER') as OilSummary[]
   const essentials = oils.filter((o) => o.type === 'ESSENTIAL') as OilSummary[]
@@ -91,7 +118,14 @@ export default async function BlendPage({ searchParams }: { searchParams: Promis
           Choose your carrier oils, add essential oils, and see your compatibility score in real time.
         </p>
       </div>
-      <BlendBuilder carriers={carriers} essentials={essentials} initialBlend={initialBlend} pendingOilId={pendingOilId} tooltipsEnabled={tooltipsEnabled} />
+      <BlendBuilder
+        carriers={carriers}
+        essentials={essentials}
+        initialBlend={initialBlend}
+        pendingOilId={pendingOilId}
+        tooltipsEnabled={tooltipsEnabled}
+        collectionOilIds={collectionOilIds}
+      />
     </div>
   )
 }

@@ -66,6 +66,13 @@ export function UserMenu({
               My Blends
             </Link>
             <Link
+              href="/my-collection"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700/50"
+            >
+              My Collection
+            </Link>
+            <Link
               href="/account"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-700/50"
@@ -81,12 +88,14 @@ export function UserMenu({
                 ⚙ Admin panel
               </Link>
             )}
-            <a
-              href="/logout"
-              className="block border-t border-stone-100 px-4 py-2 text-red-600 hover:bg-red-50 dark:border-stone-700 dark:text-red-400 dark:hover:bg-red-950/30"
-            >
-              Sign out
-            </a>
+            <form action="/logout" method="post" className="block border-t border-stone-100 dark:border-stone-700">
+              <button
+                type="submit"
+                className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                Sign out
+              </button>
+            </form>
           </nav>
         </div>
       )}

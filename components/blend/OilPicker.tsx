@@ -23,6 +23,13 @@ interface OilPickerProps {
   searchValue: string
   onSearchChange: (s: string) => void
 
+  // v1.4: "From my collection" scope. When the user is signed in and has at
+  // least one oil of this type in their collection, render a chip that
+  // narrows `oils` to just those they own.
+  collectionOilIds?: ReadonlySet<string>
+  collectionOnly?: boolean
+  onCollectionOnlyChange?: (v: boolean) => void
+
   footer?: ReactNode
   singleSelect?: boolean
 }
@@ -38,15 +45,28 @@ export function OilPicker({
   onModeChange,
   searchValue,
   onSearchChange,
+  collectionOilIds,
+  collectionOnly = false,
+  onCollectionOnlyChange,
   footer,
   singleSelect = false,
 }: OilPickerProps) {
   const selectedIds = new Set(selectedOils.map((o) => o.id))
-  const filtered = oils.filter((o) =>
+
+  // Apply collection-scope filter first, then search-text filter on top.
+  // Selected oils stay visible regardless of the collection filter so the
+  // user can deselect from the picker.
+  const collectionFiltered = collectionOnly && collectionOilIds
+    ? oils.filter((o) => collectionOilIds.has(o.id) || selectedIds.has(o.id))
+    : oils
+
+  const filtered = collectionFiltered.filter((o) =>
     !searchValue ||
     o.name.toLowerCase().includes(searchValue.toLowerCase()) ||
     (o.botanicalName ?? '').toLowerCase().includes(searchValue.toLowerCase())
   )
+
+  const collectionAvailable = !!collectionOilIds && collectionOilIds.size > 0
 
   const atMax = !singleSelect && selectedIds.size >= maxCount
 
@@ -58,8 +78,22 @@ export function OilPicker({
 
   return (
     <div className="space-y-3">
-      {/* Search/Browse mode toggle */}
-      <div className="flex justify-end">
+      {/* Search/Browse mode toggle + optional "from my collection" chip */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {collectionAvailable && onCollectionOnlyChange && (
+          <button
+            type="button"
+            onClick={() => onCollectionOnlyChange(!collectionOnly)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              collectionOnly
+                ? 'border-amber-500 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-950 dark:text-amber-300'
+                : 'border-stone-300 text-stone-600 hover:bg-stone-50 dark:border-stone-600 dark:text-stone-400 dark:hover:bg-stone-700'
+            }`}
+            title="Limit the list to oils in your personal collection"
+          >
+            {collectionOnly ? '✓ From my collection' : 'From my collection'}
+          </button>
+        )}
         <div className="flex rounded-md border border-stone-200 text-xs dark:border-stone-600">
           <button
             onClick={() => onModeChange('search')}

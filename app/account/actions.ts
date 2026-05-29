@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { auth, signOut } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { formatDisplayName } from './display-name'
+import { isSupportedCurrency, DEFAULT_CURRENCY } from '@/lib/currency'
 
 export type AccountResult = { ok: true; message?: string } | { ok: false; error: string }
 
@@ -15,6 +16,7 @@ const NAME_RE = /^[^\s].*[^\s]$|^[^\s]$/
 const ProfileSchema = z.object({
   firstName: z.string().min(1).max(50).regex(NAME_RE),
   lastName: z.string().min(1).max(50).regex(NAME_RE),
+  currency: z.string().refine(isSupportedCurrency, 'Unsupported currency.'),
 })
 
 export async function updateProfileAction(_prev: AccountResult | null, formData: FormData): Promise<AccountResult> {
@@ -24,20 +26,22 @@ export async function updateProfileAction(_prev: AccountResult | null, formData:
   const parsed = ProfileSchema.safeParse({
     firstName: (formData.get('firstName') ?? '').toString().trim(),
     lastName: (formData.get('lastName') ?? '').toString().trim(),
+    currency: (formData.get('currency') ?? DEFAULT_CURRENCY).toString(),
   })
-  if (!parsed.success) return { ok: false, error: 'First and last name required (max 50 chars each).' }
+  if (!parsed.success) return { ok: false, error: 'First and last name required (max 50 chars each); currency must be one of the supported options.' }
 
   await prisma.user.update({
     where: { id: session.user.id },
     data: parsed.data,
   })
   revalidatePath('/account')
+  revalidatePath('/my-collection')
   return { ok: true, message: 'Profile updated.' }
 }
 
 const DisplayNameSchema = z
   .object({
-    format: z.enum(['first-last', 'last-first', 'first-l', 'f-last', 'custom']),
+    format: z.enum(['first-last', 'last-first', 'first-l', 'f-last', 'anonymous', 'custom']),
     custom: z.string().max(80).optional(),
   })
   .refine(
@@ -110,9 +114,21 @@ export async function deleteAccountAction(): Promise<void> {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
+  // Mirror the /admin/users lockout guard: refuse if this is the last ADMIN.
+  // Otherwise the site can lose all admin access via self-delete.
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  })
+  if (me?.role === 'ADMIN') {
+    const admins = await prisma.user.count({ where: { role: 'ADMIN' } })
+    if (admins <= 1) {
+      redirect('/account?error=last-admin')
+    }
+  }
+
   await prisma.user.delete({ where: { id: session.user.id } })
-  // Cascade deletes sessions/accounts. Blends owned by this user will be
-  // handled in v1.2.0 when Blend.userId exists (cascade to anonymous).
+  // Cascade: sessions/accounts drop; blends become anonymous (FK SET NULL).
   await signOut({ redirect: false })
   redirect('/?accountDeleted=1')
 }

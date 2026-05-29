@@ -6,8 +6,10 @@ import {
   demoteUserAction,
   verifyUserEmailAction,
   deleteUserAction,
+  toggleExemptUserAction,
   type UserActionResult,
 } from './actions'
+import { relativeTime, formatShortDate } from '@/lib/format-time'
 
 interface UserRow {
   id: string
@@ -18,7 +20,16 @@ interface UserRow {
   role: 'USER' | 'ADMIN'
   emailVerified: string | null
   createdAt: string
+  lastSignInAt: string | null
+  purgeExempt: boolean
+  purgeWarningSentAt: string | null
+  purgeFinalWarningSentAt: string | null
   _count: { blends: number }
+}
+
+function fmtRelative(iso: string | null): string {
+  if (!iso) return 'never'
+  return relativeTime(new Date(iso))
 }
 
 export function AdminUsersList({ users }: { users: UserRow[] }) {
@@ -52,10 +63,6 @@ export function AdminUsersList({ users }: { users: UserRow[] }) {
     })
   }
 
-  function fmt(iso: string | null) {
-    if (!iso) return '—'
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-  }
 
   return (
     <div>
@@ -100,7 +107,19 @@ export function AdminUsersList({ users }: { users: UserRow[] }) {
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
               <span>{u._count.blends} blend{u._count.blends === 1 ? '' : 's'}</span>
               <span>Email {u.emailVerified ? '✓ verified' : '⏳ unverified'}</span>
-              <span>Joined {fmt(u.createdAt)}</span>
+              <span>Last sign-in: {fmtRelative(u.lastSignInAt)}</span>
+              <span>Joined {formatShortDate(u.createdAt)}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {u.purgeExempt && (
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" title="Exempt from auto-purge">🛡 Exempt</span>
+              )}
+              {u.purgeFinalWarningSentAt && (
+                <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300" title="Final purge warning sent">⚠ Final warning</span>
+              )}
+              {!u.purgeFinalWarningSentAt && u.purgeWarningSentAt && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="Purge warning sent">⚠ Warned</span>
+              )}
             </div>
             <UserActions user={u} busy={pending && busyId === u.id} onRun={run} />
           </li>
@@ -115,16 +134,18 @@ export function AdminUsersList({ users }: { users: UserRow[] }) {
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Email</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Name</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Role</th>
-              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Email</th>
+              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Verified</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Blends</th>
+              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Last sign-in</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Joined</th>
+              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Status</th>
               <th className="px-3 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 dark:divide-stone-700">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
+                <td colSpan={9} className="px-4 py-8 text-center text-sm text-stone-400 dark:text-stone-500">
                   {users.length === 0 ? 'No users yet.' : 'No users match your search.'}
                 </td>
               </tr>
@@ -144,7 +165,21 @@ export function AdminUsersList({ users }: { users: UserRow[] }) {
                   {u.emailVerified ? <span className="text-emerald-600 dark:text-emerald-500">✓ verified</span> : <span className="text-amber-600 dark:text-amber-500">⏳ unverified</span>}
                 </td>
                 <td className="px-3 py-2.5 text-stone-500 dark:text-stone-400">{u._count.blends}</td>
-                <td className="px-3 py-2.5 text-xs text-stone-400 dark:text-stone-500">{fmt(u.createdAt)}</td>
+                <td className="px-3 py-2.5 text-xs text-stone-500 dark:text-stone-400">{fmtRelative(u.lastSignInAt)}</td>
+                <td className="px-3 py-2.5 text-xs text-stone-400 dark:text-stone-500">{formatShortDate(u.createdAt)}</td>
+                <td className="px-3 py-2.5">
+                  <div className="flex flex-wrap gap-1">
+                    {u.purgeExempt && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" title="Exempt from auto-purge">🛡</span>
+                    )}
+                    {u.purgeFinalWarningSentAt && (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300" title="Final purge warning sent">⚠ final</span>
+                    )}
+                    {!u.purgeFinalWarningSentAt && u.purgeWarningSentAt && (
+                      <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="Purge warning sent">⚠</span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-3 py-2.5">
                   <UserActions user={u} busy={pending && busyId === u.id} onRun={run} inline />
                 </td>
@@ -207,6 +242,20 @@ function UserActions({
           Mark verified
         </button>
       )}
+
+      <button
+        type="button"
+        onClick={() => onRun(user.id, toggleExemptUserAction)}
+        disabled={busy}
+        className={`${buttonClass} ${
+          user.purgeExempt
+            ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950'
+            : 'border-stone-300 text-stone-700 hover:bg-stone-50 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-700'
+        }`}
+        title={user.purgeExempt ? 'Click to remove auto-purge exemption' : 'Click to exempt from auto-purge'}
+      >
+        {user.purgeExempt ? '🛡 Exempt' : 'Make exempt'}
+      </button>
 
       <button
         type="button"

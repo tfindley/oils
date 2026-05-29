@@ -15,6 +15,7 @@ interface BlendRow {
   isFeatured: boolean
   isPinned: boolean
   isHidden: boolean
+  user: { email: string; name: string | null } | null
   _count: { ingredients: number }
 }
 
@@ -30,7 +31,9 @@ export function AdminBlendActions({ blends }: { blends: BlendRow[] }) {
         (b) =>
           b.id.toLowerCase().includes(normalised) ||
           b.name.toLowerCase().includes(normalised) ||
-          (b.authorName ?? '').toLowerCase().includes(normalised),
+          (b.authorName ?? '').toLowerCase().includes(normalised) ||
+          (b.user?.email ?? '').toLowerCase().includes(normalised) ||
+          (b.user?.name ?? '').toLowerCase().includes(normalised),
       )
     : blends
 
@@ -87,7 +90,7 @@ export function AdminBlendActions({ blends }: { blends: BlendRow[] }) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by ID, name, or author…"
+          placeholder="Search by ID, name, author, or email…"
           className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-base sm:w-72 sm:text-sm focus:border-amber-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
         />
         <span className="text-xs text-stone-500 dark:text-stone-400">
@@ -136,8 +139,11 @@ export function AdminBlendActions({ blends }: { blends: BlendRow[] }) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium text-stone-900 dark:text-stone-100">{b.name}</div>
+                      <div className="truncate font-mono text-xs text-stone-600 dark:text-stone-300">
+                        {b.user?.email ?? '(anonymous save)'}
+                      </div>
                       <div className="truncate text-xs text-stone-500 dark:text-stone-400">
-                        {b.authorName ?? 'No author'}
+                        Display: {b.user?.name ?? b.authorName ?? '—'}
                       </div>
                     </div>
                     <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -195,7 +201,7 @@ export function AdminBlendActions({ blends }: { blends: BlendRow[] }) {
                 />
               </th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Name</th>
-              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Author</th>
+              <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Owner / Display</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Grade</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Views</th>
               <th className="px-3 py-3 font-semibold text-stone-700 dark:text-stone-300">Last accessed</th>
@@ -223,7 +229,10 @@ export function AdminBlendActions({ blends }: { blends: BlendRow[] }) {
                   />
                 </td>
                 <td className="px-3 py-2.5 font-medium text-stone-900 dark:text-stone-100">{b.name}</td>
-                <td className="px-3 py-2.5 text-stone-500 dark:text-stone-400">{b.authorName ?? '—'}</td>
+                <td className="px-3 py-2.5">
+                  <div className="font-mono text-xs text-stone-700 dark:text-stone-300">{b.user?.email ?? '(anonymous save)'}</div>
+                  <div className="text-xs text-stone-500 dark:text-stone-400">{b.user?.name ?? b.authorName ?? '—'}</div>
+                </td>
                 <td className="px-3 py-2.5">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                     b.grade === 'A' ? 'bg-emerald-100 text-emerald-800' :

@@ -2,14 +2,18 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { isAdminAuthenticated } from '@/lib/admin-auth'
 
 export type UserActionResult = { ok: true; message?: string } | { ok: false; error: string }
+
+const NOT_ADMIN: UserActionResult = { ok: false, error: 'Not authorized.' }
 
 async function adminCount(): Promise<number> {
   return prisma.user.count({ where: { role: 'ADMIN' } })
 }
 
 export async function promoteUserAction(userId: string): Promise<UserActionResult> {
+  if (!(await isAdminAuthenticated())) return NOT_ADMIN
   if (!userId) return { ok: false, error: 'No user id.' }
   await prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } })
   revalidatePath('/admin/users')
@@ -17,6 +21,7 @@ export async function promoteUserAction(userId: string): Promise<UserActionResul
 }
 
 export async function demoteUserAction(userId: string): Promise<UserActionResult> {
+  if (!(await isAdminAuthenticated())) return NOT_ADMIN
   if (!userId) return { ok: false, error: 'No user id.' }
 
   // Lockout guard — refuse to demote the last remaining admin.
@@ -35,13 +40,32 @@ export async function demoteUserAction(userId: string): Promise<UserActionResult
 }
 
 export async function verifyUserEmailAction(userId: string): Promise<UserActionResult> {
+  if (!(await isAdminAuthenticated())) return NOT_ADMIN
   if (!userId) return { ok: false, error: 'No user id.' }
   await prisma.user.update({ where: { id: userId }, data: { emailVerified: new Date() } })
   revalidatePath('/admin/users')
   return { ok: true, message: 'Email manually marked verified.' }
 }
 
+export async function toggleExemptUserAction(userId: string): Promise<UserActionResult> {
+  if (!(await isAdminAuthenticated())) return NOT_ADMIN
+  if (!userId) return { ok: false, error: 'No user id.' }
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { purgeExempt: true } })
+  if (!target) return { ok: false, error: 'User not found.' }
+  // Flipping a user OFF the exempt list also clears any stale warning stamps
+  // so the cron starts fresh from current activity state.
+  await prisma.user.update({
+    where: { id: userId },
+    data: target.purgeExempt
+      ? { purgeExempt: false }
+      : { purgeExempt: true, purgeWarningSentAt: null, purgeFinalWarningSentAt: null },
+  })
+  revalidatePath('/admin/users')
+  return { ok: true, message: target.purgeExempt ? 'Auto-purge exemption removed.' : 'User exempted from auto-purge.' }
+}
+
 export async function deleteUserAction(userId: string): Promise<UserActionResult> {
+  if (!(await isAdminAuthenticated())) return NOT_ADMIN
   if (!userId) return { ok: false, error: 'No user id.' }
 
   // Lockout guard — refuse to delete the last remaining admin.

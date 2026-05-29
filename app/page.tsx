@@ -9,7 +9,13 @@ export const dynamic = 'force-dynamic'
 export default async function Home() {
   const [featuredBlends, carrierCount, essentialCount, pairingCount, communityBlendCount] = await Promise.all([
     prisma.blend.findMany({
-      where: { isHidden: false, OR: [{ isFeatured: true }, { isPinned: true }] },
+      where: {
+        isHidden: false,
+        // Privacy gate: anonymous blends are public by URL; owned blends only
+        // appear in public listings when explicitly shared.
+        OR: [{ userId: null }, { isShared: true }],
+        AND: { OR: [{ isFeatured: true }, { isPinned: true }] },
+      },
       select: {
         id: true,
         name: true,

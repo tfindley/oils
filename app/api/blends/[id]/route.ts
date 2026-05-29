@@ -1,30 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/auth'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const blend = await prisma.blend.findUnique({
-    where: { id },
-    include: {
-      ingredients: {
-        include: {
-          oil: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              benefits: true,
-              contraindications: true,
-              aroma: true,
+  const [blend, session] = await Promise.all([
+    prisma.blend.findUnique({
+      where: { id },
+      include: {
+        ingredients: {
+          include: {
+            oil: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                benefits: true,
+                contraindications: true,
+                aroma: true,
+              },
             },
           },
         },
       },
-    },
-  })
+    }),
+    auth().catch(() => null),
+  ])
 
   if (!blend) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Mirror the access control on app/blend/[id]/page.tsx — anonymous blends are
+  // public by URL; owned blends require isShared OR viewer is owner.
+  const viewerId = session?.user?.id ?? null
+  const isOwner = blend.userId !== null && blend.userId === viewerId
+  const isViewable = blend.userId === null || blend.isShared || isOwner
+  if (!isViewable) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const oilIds = blend.ingredients.map((i) => i.oilId)
 

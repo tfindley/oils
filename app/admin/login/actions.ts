@@ -8,18 +8,22 @@ import { getSettings } from '@/lib/settings'
 
 export async function adminLogin(_prev: unknown, data: FormData): Promise<{ error: string } | never> {
   // Reject if legacy login is disabled — protect against direct POSTs even
-  // though the page itself 404s.
+  // though the page itself 404s. Fail-closed when settings lookup fails so a
+  // DB blip doesn't re-enable the legacy path.
   const settings = await getSettings().catch(() => null)
   const forceLegacy = process.env.FORCE_LEGACY_ADMIN_LOGIN === '1'
-  if (settings && !settings.legacyAdminEnabled && !forceLegacy) {
+  const legacyAllowed = forceLegacy || settings?.legacyAdminEnabled === true
+  if (!legacyAllowed) {
     return { error: 'Legacy admin login is disabled.' }
   }
 
   const secret = process.env.ADMIN_SECRET
   const input = data.get('secret')?.toString() ?? ''
 
+  // Without ADMIN_SECRET set there is no legacy login path. proxy.ts only
+  // accepts ADMIN-role sessions in that case, so reject directly here too.
   if (!secret) {
-    redirect('/admin')
+    return { error: 'Legacy admin login is not configured.' }
   }
 
   const hdrs = await headers()

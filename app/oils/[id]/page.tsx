@@ -2,12 +2,14 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/auth'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PairingBadge } from '@/components/blend/PairingBadge'
 import { Button } from '@/components/ui/Button'
 import { AddToBlendButton } from '@/components/oils/AddToBlendButton'
 import { AddToCompareButton } from '@/components/oils/AddToCompareButton'
+import { AddToCollectionButton } from '@/components/oils/AddToCollectionButton'
 import type { PairingRating } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -21,15 +23,29 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function OilDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const oil = await prisma.oil.findUnique({
-    where: { id },
-    include: {
-      pairsWithA: { include: { oilB: { select: { id: true, name: true } } } },
-      pairsWithB: { include: { oilA: { select: { id: true, name: true } } } },
-    },
-  })
+  const [oil, session] = await Promise.all([
+    prisma.oil.findUnique({
+      where: { id },
+      include: {
+        pairsWithA: { include: { oilB: { select: { id: true, name: true } } } },
+        pairsWithB: { include: { oilA: { select: { id: true, name: true } } } },
+      },
+    }),
+    auth().catch(() => null),
+  ])
 
   if (!oil) notFound()
+
+  // Is this oil in the signed-in user's collection? Cheap one-row lookup; only
+  // runs for authed sessions, otherwise inCollection stays false.
+  let inCollection = false
+  if (session?.user?.id) {
+    const entry = await prisma.userOilCollection.findUnique({
+      where: { userId_oilId: { userId: session.user.id, oilId: id } },
+      select: { id: true },
+    })
+    inCollection = entry != null
+  }
 
   const pairings = [
     ...oil.pairsWithA.map((p) => ({
@@ -89,6 +105,7 @@ export default async function OilDetailPage({ params }: { params: Promise<{ id: 
           )}
           <AddToBlendButton oilId={oil.id} oilName={oil.name} oilType={oil.type as 'CARRIER' | 'ESSENTIAL'} />
           <AddToCompareButton oilId={oil.id} oilName={oil.name} />
+          <AddToCollectionButton oilId={oil.id} inCollection={inCollection} signedIn={!!session?.user?.id} />
         </div>
       </div>
 

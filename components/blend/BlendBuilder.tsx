@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import type { OilSummary, PairingRating, BlendGrade } from '@/types'
 import { calculateBlend, dropsToPct, pctToDrops } from '@/lib/blend-calculator'
@@ -72,9 +72,13 @@ interface BlendBuilderProps {
   }
   pendingOilId?: string
   tooltipsEnabled?: boolean
+  // v1.4: signed-in user's oil collection IDs, fetched server-side. Powers
+  // the "From my collection" filter chip in each picker. Empty / undefined
+  // when the viewer is signed out, which hides the chip entirely.
+  collectionOilIds?: string[]
 }
 
-export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId, tooltipsEnabled = true }: BlendBuilderProps) {
+export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId, tooltipsEnabled = true, collectionOilIds = [] }: BlendBuilderProps) {
   const router = useRouter()
 
   const [selectedCarriers, setSelectedCarriers] = useState<SelectedCarrier[]>(initialBlend?.carriers ?? [])
@@ -89,8 +93,26 @@ export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId,
   const [saveError, setSaveError] = useState('')
   const [eoSearch, setEoSearch] = useState('')
   const [eoMode, setEoMode] = useState<'search' | 'browse'>('search')
+  const [eoCollectionOnly, setEoCollectionOnly] = useState(false)
   const [carrierSearch, setCarrierSearch] = useState('')
   const [carrierMode, setCarrierMode] = useState<'search' | 'browse'>('search')
+  const [carrierCollectionOnly, setCarrierCollectionOnly] = useState(false)
+
+  // v1.4: oil IDs the user has in their collection, split per type so each
+  // picker only shows the "from my collection" chip when the user has at
+  // least one oil of that type. Memoised so we don't re-walk the oil arrays
+  // on every keystroke in the builder.
+  const { carrierCollectionIds, eoCollectionIds } = useMemo(() => {
+    const carrierIds = new Set(carriers.map((o) => o.id))
+    const eoIds = new Set(essentials.map((o) => o.id))
+    const carrier = new Set<string>()
+    const eo = new Set<string>()
+    for (const id of collectionOilIds) {
+      if (carrierIds.has(id)) carrier.add(id)
+      else if (eoIds.has(id)) eo.add(id)
+    }
+    return { carrierCollectionIds: carrier, eoCollectionIds: eo }
+  }, [carriers, essentials, collectionOilIds])
   const [activeTab, setActiveTab] = useState<Tab>(initialBlend?.carriers && initialBlend.carriers.length > 0 ? 3 : 1)
   const [avoidAcknowledged, setAvoidAcknowledged] = useState(false)
   const [hydrated, setHydrated] = useState(false)
@@ -225,10 +247,12 @@ export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId,
   const hasBlend = isScorable(selectedCarriers.length, selectedEOs.length)
   const savable = isSavable(selectedCarriers.length, selectedEOs.length)
 
-  // Auto-save the draft whenever blend state changes (after hydration)
+  // Auto-save the draft whenever blend state changes (after hydration).
+  // Empty-check is oil-only: a name or note without any oils is not a blend,
+  // so we drop it rather than persist a "ghost" draft across sessions.
   useEffect(() => {
     if (!hydrated) return
-    if (selectedCarriers.length === 0 && selectedEOs.length === 0 && !blendName && !blendNotes) {
+    if (selectedCarriers.length === 0 && selectedEOs.length === 0) {
       clearDraft()
       return
     }
@@ -437,6 +461,10 @@ export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId,
         return
       }
       const { id } = await res.json()
+      // Reset form state so a fresh /blend visit doesn't repopulate name/notes
+      // from React state via the auto-save effect before navigation completes.
+      setBlendName('')
+      setBlendNotes('')
       clearDraft()
       router.push(`/blend/${id}`)
     } catch {
@@ -514,6 +542,9 @@ export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId,
                 onModeChange={setCarrierMode}
                 searchValue={carrierSearch}
                 onSearchChange={setCarrierSearch}
+                collectionOilIds={carrierCollectionIds}
+                collectionOnly={carrierCollectionOnly}
+                onCollectionOnlyChange={setCarrierCollectionOnly}
                 footer={
                   <div className="mt-4 flex justify-end">
                     <button
@@ -551,6 +582,9 @@ export function BlendBuilder({ carriers, essentials, initialBlend, pendingOilId,
                 onModeChange={setEoMode}
                 searchValue={eoSearch}
                 onSearchChange={setEoSearch}
+                collectionOilIds={eoCollectionIds}
+                collectionOnly={eoCollectionOnly}
+                onCollectionOnlyChange={setEoCollectionOnly}
                 footer={
                   <div className="mt-4 flex justify-end">
                     <button

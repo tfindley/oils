@@ -84,6 +84,13 @@ export function MobileMenu({ isLoggedIn = false, isAdmin = false }: MobileMenuPr
                 >
                   My Blends
                 </Link>
+                <Link
+                  href="/my-collection"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center py-3.5 text-base font-medium text-stone-700 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-400"
+                >
+                  My Collection
+                </Link>
                 {isAdmin && (
                   <Link
                     href="/admin"

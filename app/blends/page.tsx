@@ -12,7 +12,12 @@ export default async function BlendsPage() {
   const blends = await prisma.blend.findMany({
     where: {
       isHidden: false,
-      OR: [{ isFeatured: true }, { isPinned: true }, { viewCount: { gte: 5 } }],
+      // Privacy gate: anonymous blends (no userId) are public by URL; owned
+      // blends only appear in public listings when explicitly shared.
+      OR: [{ userId: null }, { isShared: true }],
+      AND: {
+        OR: [{ isFeatured: true }, { isPinned: true }, { viewCount: { gte: 5 } }],
+      },
     },
     select: {
       id: true,

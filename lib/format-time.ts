@@ -8,3 +8,12 @@ export function relativeTime(date: Date): string {
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
+
+// Short en-GB date: "5 Jan 2026". Accepts a Date, an ISO string, or null
+// (returns '—'). Single source for the format used across admin/account
+// surfaces — keeps tweaks (locale, separator) to one place.
+export function formatShortDate(date: Date | string | null | undefined): string {
+  if (!date) return '—'
+  const d = typeof date === 'string' ? new Date(date) : date
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}

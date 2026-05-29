@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
+import { DROPS_PER_ML } from '@/lib/blend-calculator'
 
 export const dynamic = 'force-dynamic'
 import { Badge } from '@/components/ui/Badge'
@@ -31,7 +32,7 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
         ingredients: {
           include: {
             oil: {
-              select: { id: true, name: true, type: true, benefits: true, contraindications: true, aroma: true },
+              select: { id: true, name: true, type: true, benefits: true, contraindications: true, aroma: true, buyUrl: true },
             },
           },
         },
@@ -54,6 +55,22 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
   if (!isViewable) notFound()
 
   const canClaim = viewerId !== null && blend.userId === null
+
+  // v1.4: which of this blend's oils does the viewer already own? Empty
+  // arrays when signed out — the shopping list card is hidden in that case.
+  // Single partition pass over ingredients.
+  const ownedIngredients: typeof blend.ingredients = []
+  const missingIngredients: typeof blend.ingredients = []
+  if (viewerId) {
+    const owned = await prisma.userOilCollection.findMany({
+      where: { userId: viewerId, oilId: { in: blend.ingredients.map((i) => i.oilId) } },
+      select: { oilId: true },
+    })
+    const ownedIds = new Set(owned.map((o) => o.oilId))
+    for (const ing of blend.ingredients) {
+      (ownedIds.has(ing.oilId) ? ownedIngredients : missingIngredients).push(ing)
+    }
+  }
 
   // Fire-and-forget — don't await so page render isn't delayed
   prisma.blend.update({
@@ -107,7 +124,7 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
       oilType: i.oil.type as 'ESSENTIAL' | 'CARRIER',
       percentagePct: i.percentagePct,
       volumeMl: i.volumeMl,
-      drops: Math.round(i.volumeMl * 20),
+      drops: Math.round(i.volumeMl * DROPS_PER_ML),
       benefits: i.oil.benefits,
       contraindications: i.oil.contraindications,
       aroma: i.oil.aroma,
@@ -277,6 +294,60 @@ export default async function BlendDetailPage({ params }: { params: Promise<{ id
               )}
             </CardBody>
           </Card>
+
+          {/* Shopping list — only when signed in; hidden if the viewer owns everything */}
+          {viewerId && missingIngredients.length > 0 && (
+            <Card>
+              <CardHeader>
+                <h2 className="font-serif text-lg font-semibold text-stone-800 dark:text-stone-200">Shopping list</h2>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  {missingIngredients.length} oil{missingIngredients.length === 1 ? '' : 's'} you don&apos;t own yet
+                </p>
+              </CardHeader>
+              <CardBody className="space-y-3">
+                <ul className="space-y-1.5">
+                  {missingIngredients.map((i) => (
+                    <li key={i.oilId} className="flex items-center justify-between gap-3 text-sm">
+                      <Link
+                        href={`/oils/${i.oilId}`}
+                        className="text-stone-800 hover:text-amber-700 dark:text-stone-200 dark:hover:text-amber-400"
+                      >
+                        {i.oil.name}
+                      </Link>
+                      {i.oil.buyUrl ? (
+                        <a
+                          href={i.oil.buyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer sponsored"
+                          className="shrink-0 text-xs font-medium text-amber-700 hover:underline dark:text-amber-500"
+                        >
+                          Buy ↗
+                        </a>
+                      ) : (
+                        <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">no link</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {ownedIngredients.length > 0 && (
+                  <p className="border-t border-stone-100 pt-2 text-xs text-stone-500 dark:border-stone-700 dark:text-stone-400">
+                    You already have{' '}
+                    <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                      {ownedIngredients.length} of {blend.ingredients.length}
+                    </span>{' '}
+                    oils in this recipe.
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+          )}
+          {viewerId && missingIngredients.length === 0 && blend.ingredients.length > 0 && (
+            <Card>
+              <CardBody className="text-sm text-emerald-700 dark:text-emerald-400">
+                ✓ You have every oil in this blend in your collection.
+              </CardBody>
+            </Card>
+          )}
 
           {/* Notes */}
           {blend.notes && (

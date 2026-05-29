@@ -40,9 +40,25 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions Session[]
-  accounts Account[]
-  blends   Blend[]
+  // Account lifecycle (v1.3.0). lastSignInAt is touched in auth.ts on each
+  // successful sign-in. The purge cron uses (lastSignInAt ?? createdAt) as
+  // the "last activity" anchor — see app/api/cron/account-purge/route.ts.
+  lastSignInAt            DateTime?
+  purgeExempt             Boolean   @default(false)
+  purgeWarningSentAt      DateTime?
+  purgeFinalWarningSentAt DateTime?
+
+  // ISO 4217 currency code for cost-display. Default GBP for back-compat
+  // with v1.4.0 (when costs rendered as £ unconditionally). Users in other
+  // countries change this in /account → Profile.
+  currency                String    @default("GBP")
+
+  sessions      Session[]
+  accounts      Account[]
+  blends        Blend[]
+  oilCollection UserOilCollection[]
+
+  @@index([lastSignInAt])
 }
 
 model Session {
@@ -109,9 +125,10 @@ model Oil {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  pairsWithA       OilPairing[]     @relation("OilA")
-  pairsWithB       OilPairing[]     @relation("OilB")
+  pairsWithA       OilPairing[]        @relation("OilA")
+  pairsWithB       OilPairing[]        @relation("OilB")
   blendIngredients BlendIngredient[]
+  collectionEntries UserOilCollection[]
 }
 
 model OilPairing {
@@ -172,6 +189,34 @@ model BlendIngredient {
   @@unique([blendId, oilId])
 }
 
+// v1.4.0 — personal oil collection. A user "owning" an oil they entered into
+// their inventory, with optional quantity / opened / expiry / supplier / cost.
+// Drives the "from my collection" builder filter and the per-blend shopping
+// list view.
+model UserOilCollection {
+  id        String   @id @default(cuid())
+  userId    String
+  oilId     String
+  quantity  Float?   // remaining volume in ml; optional
+  openedAt  DateTime?
+  expiresAt DateTime?
+  supplier  String?
+  cost      Float?   // purchase price (in User.currency) for the bottle as bought
+  bottleSizeMl Float? // size of the bottle the `cost` applies to. Gives cost a
+                     // real unit ("£12.50 for 30 ml") — without it, cost on its
+                     // own is arbitrary because a 5 ml costs less than a 100 ml.
+  batchNo   String?
+  notes     String?  @db.Text
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oil  Oil  @relation(fields: [oilId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, oilId])
+  @@index([userId])
+}
+
 // Single-row site settings. Always upserted/read via id="singleton".
 model Settings {
   id                    String   @id @default("singleton")
@@ -182,5 +227,9 @@ model Settings {
   // /admin/login is hidden. Set to false once user-based ADMIN access is
   // verified to working. Recoverable via FORCE_LEGACY_ADMIN_LOGIN=1 env var.
   legacyAdminEnabled    Boolean  @default(true)
+  // Operator kill-switch. When true, proxy.ts rewrites all public routes
+  // to /maintenance; /admin/* remains reachable so the operator can flip
+  // it back. See AGENTS.md "Maintenance mode" for the exemption list.
+  maintenanceMode       Boolean  @default(false)
   updatedAt             DateTime @updatedAt
 }

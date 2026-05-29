@@ -32,20 +32,19 @@ export async function claimBlendAction(blendId: string): Promise<BlendActionResu
   const session = await auth()
   if (!session?.user?.id) return { ok: false, error: 'Sign in first.' }
 
-  const blend = await prisma.blend.findUnique({
-    where: { id: blendId },
-    select: { userId: true },
-  })
-  if (!blend) return { ok: false, error: 'Blend not found.' }
-  if (blend.userId !== null) return { ok: false, error: 'This blend already has an owner.' }
-
+  // Atomic claim: scope the update to userId == null so concurrent claims
+  // can't both succeed. updateMany returns count=0 when the row is missing
+  // or already owned; either way, no claim happens for this caller.
   // Claiming preserves the existing access pattern: anonymous blends are
   // public by URL, so the newly-claimed blend stays public (isShared = true).
-  // Owner can switch to private later via the share toggle.
-  await prisma.blend.update({
-    where: { id: blendId },
+  const { count } = await prisma.blend.updateMany({
+    where: { id: blendId, userId: null },
     data: { userId: session.user.id, isShared: true },
   })
+  if (count === 0) {
+    // Don't leak whether the blend exists vs. is already owned.
+    return { ok: false, error: 'This blend can no longer be claimed.' }
+  }
   revalidatePath(`/blend/${blendId}`)
   revalidatePath('/my-blends')
   return { ok: true, message: 'Claimed.' }

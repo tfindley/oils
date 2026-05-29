@@ -79,10 +79,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     jwt: async ({ token, user, trigger }) => {
       // On sign-in (user object present) OR on explicit update, refresh from DB.
       if (user?.id) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { id: true, role: true, emailVerified: true, name: true, email: true, image: true },
-        })
+        // Best-effort: stamp lastSignInAt and clear any pending purge warnings.
+        // Signing in is the canonical "I'm still here" signal for the cron.
+        //
+        // Wrapped in try/catch so a schema-drift failure (lifecycle columns
+        // missing because migrations haven't applied) OR a transient DB error
+        // doesn't block sign-in. Auth.js otherwise maps any throw here to a
+        // generic `CredentialsSignin` error, which would leave a user with
+        // valid credentials staring at "incorrect email or password".
+        let dbUser: {
+          id: string
+          role: 'USER' | 'ADMIN'
+          emailVerified: Date | null
+          name: string | null
+          email: string
+          image: string | null
+        } | null = null
+        try {
+          dbUser = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              lastSignInAt: new Date(),
+              purgeWarningSentAt: null,
+              purgeFinalWarningSentAt: null,
+            },
+            select: { id: true, role: true, emailVerified: true, name: true, email: true, image: true },
+          })
+        } catch (err) {
+          console.error('[auth] failed to stamp lastSignInAt; falling back to read-only', err)
+          // Fall through to a select-only read so the session is still issued.
+          // Lifecycle stamping is non-essential — the cron will catch up next sign-in.
+          dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { id: true, role: true, emailVerified: true, name: true, email: true, image: true },
+          }).catch(() => null)
+        }
         if (dbUser) {
           token.sub = dbUser.id
           token.role = dbUser.role

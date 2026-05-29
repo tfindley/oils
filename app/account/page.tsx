@@ -7,21 +7,33 @@ import { ProfileForm, DisplayNameForm, PasswordForm, DeleteAccount } from './Acc
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Account' }
 
-export default async function AccountPage() {
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>
+}) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { firstName: true, lastName: true, name: true, email: true, emailVerified: true },
+    select: { firstName: true, lastName: true, name: true, email: true, emailVerified: true, currency: true },
   })
   if (!user) redirect('/login')
 
   const profileIncomplete = !user.firstName || !user.lastName
+  const { error } = await searchParams
+  const lastAdminError = error === 'last-admin'
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 space-y-6">
       <h1 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-100">Account</h1>
+
+      {lastAdminError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+          You&apos;re the only admin — promote another user to ADMIN before you can delete your account.
+        </div>
+      )}
 
       {!user.emailVerified && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -44,7 +56,7 @@ export default async function AccountPage() {
             <p className="text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400">Email</p>
             <p className="font-mono text-sm text-stone-800 dark:text-stone-200">{user.email}</p>
           </div>
-          <ProfileForm firstName={user.firstName} lastName={user.lastName} />
+          <ProfileForm firstName={user.firstName} lastName={user.lastName} currency={user.currency} />
         </CardBody>
       </Card>
 

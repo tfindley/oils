@@ -105,6 +105,32 @@ export function verificationEmail(opts: { to: string; verifyUrl: string }): Emai
   }
 }
 
+export function accountInactivityWarningEmail(opts: {
+  to: string
+  daysUntilDelete: number
+  signInUrl: string
+}): EmailMessage {
+  const days = opts.daysUntilDelete
+  return {
+    to: opts.to,
+    subject: `Your ${FROM_NAME} account will be deleted in ${days} day${days === 1 ? '' : 's'}`,
+    text:
+      `Your ${FROM_NAME} account has been inactive for nearly a year.\n\n` +
+      `To keep your account and your saved blends, sign in within the next ${days} day${days === 1 ? '' : 's'}:\n${opts.signInUrl}\n\n` +
+      `If you do nothing, your account and all data tied to it will be permanently deleted. ` +
+      `Saved blends will remain accessible by their URLs as anonymous blends for up to 30 more days, ` +
+      `then they too will be auto-removed.\n\n` +
+      `You can also delete the account yourself any time from /account.`,
+    html:
+      `<p>Your <strong>${FROM_NAME}</strong> account has been inactive for nearly a year.</p>` +
+      `<p>To keep your account and your saved blends, sign in within the next <strong>${days} day${days === 1 ? '' : 's'}</strong>:</p>` +
+      `<p><a href="${opts.signInUrl}">${opts.signInUrl}</a></p>` +
+      `<p style="color:#888;font-size:12px">If you do nothing, your account and all data tied to it will be permanently deleted. ` +
+      `Saved blends will remain accessible by their URLs as anonymous blends for up to 30 more days, then they too will be auto-removed. ` +
+      `You can also delete the account yourself any time from <code>/account</code>.</p>`,
+  }
+}
+
 export function passwordResetEmail(opts: { to: string; resetUrl: string }): EmailMessage {
   return {
     to: opts.to,

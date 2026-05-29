@@ -1,45 +1,45 @@
 import { cache } from 'react'
+import type { Settings as PrismaSettings } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
-// Singleton settings row keyed by id="singleton". `getSettings()` is wrapped in
-// React's `cache()` so multiple callers within the same request (Footer +
-// page) share one DB hit. Falls back to defaults if the migration hasn't run.
+// Singleton settings row keyed by id="singleton". Two layers of caching:
+//   • React.cache() — dedupes within a single render (Footer + page).
+//   • Module-level TTL cache (below) — dedupes across requests, which the
+//     proxy.ts maintenance gate relies on so it doesn't hit Prisma on every
+//     request after the broadened matcher in v1.4.x.
+//
+// Writes invalidate the cache for the writing process. Other processes /
+// containers see up to TTL_MS of staleness. Acceptable: settings change rarely.
 
-export interface SiteSettings {
-  tooltipsEnabled: boolean
-  issueReportingEnabled: boolean
-  allowAnonymousSaves: boolean
-  legacyAdminEnabled: boolean
-}
+export type SiteSettings = Omit<PrismaSettings, 'id' | 'updatedAt'>
 
 const DEFAULTS: SiteSettings = {
   tooltipsEnabled: true,
   issueReportingEnabled: true,
   allowAnonymousSaves: true,
   legacyAdminEnabled: true,
+  maintenanceMode: false,
 }
 
-function pick(row: {
-  tooltipsEnabled: boolean
-  issueReportingEnabled: boolean
-  allowAnonymousSaves: boolean
-  legacyAdminEnabled: boolean
-}): SiteSettings {
-  return {
-    tooltipsEnabled: row.tooltipsEnabled,
-    issueReportingEnabled: row.issueReportingEnabled,
-    allowAnonymousSaves: row.allowAnonymousSaves,
-    legacyAdminEnabled: row.legacyAdminEnabled,
-  }
+function pick(row: PrismaSettings): SiteSettings {
+  const { id: _id, updatedAt: _updatedAt, ...rest } = row
+  return rest
 }
+
+const TTL_MS = 30_000
+let cached: { value: SiteSettings; expiresAt: number } | null = null
 
 export const getSettings = cache(async (): Promise<SiteSettings> => {
+  if (cached && cached.expiresAt > Date.now()) return cached.value
   try {
     const row =
       (await prisma.settings.findUnique({ where: { id: 'singleton' } })) ??
       (await prisma.settings.create({ data: { id: 'singleton', ...DEFAULTS } }))
-    return pick(row)
+    const value = pick(row)
+    cached = { value, expiresAt: Date.now() + TTL_MS }
+    return value
   } catch {
+    // Don't poison the cache with DEFAULTS — let the next call retry.
     return DEFAULTS
   }
 })
@@ -50,5 +50,7 @@ export async function updateSettings(patch: Partial<SiteSettings>): Promise<Site
     update: patch,
     create: { id: 'singleton', ...DEFAULTS, ...patch },
   })
-  return pick(row)
+  const value = pick(row)
+  cached = { value, expiresAt: Date.now() + TTL_MS }
+  return value
 }

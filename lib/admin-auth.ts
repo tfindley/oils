@@ -61,3 +61,31 @@ export async function verifySessionToken(cookieValue: string | undefined, secret
   const expected = await hmacHex(secret, token)
   return timingSafeEqual(hexToBytes(sig), hexToBytes(expected))
 }
+
+// Defense-in-depth gate for admin server actions. proxy.ts already restricts
+// /admin/* navigation, but server actions are POSTed against the page URL — if
+// the action ID ever flows to a non-admin route, the proxy matcher misses it.
+// Every mutation-bearing admin action should call this and bail on false.
+//
+// Mirrors proxy.ts: ADMIN role OR a valid legacy cookie when allowed.
+// Fail-closed if Settings lookup fails so a DB blip doesn't re-enable legacy.
+export async function isAdminAuthenticated(): Promise<boolean> {
+  const { auth } = await import('@/auth')
+  const { cookies } = await import('next/headers')
+  const { getSettings } = await import('@/lib/settings')
+
+  const session = await auth().catch(() => null)
+  if (session?.user?.role === 'ADMIN') return true
+
+  const secret = process.env.ADMIN_SECRET
+  if (!secret) return false
+
+  const settings = await getSettings().catch(() => null)
+  const forceLegacy = process.env.FORCE_LEGACY_ADMIN_LOGIN === '1'
+  const legacyAllowed = forceLegacy || settings?.legacyAdminEnabled === true
+  if (!legacyAllowed) return false
+
+  const jar = await cookies()
+  const token = jar.get('admin_token')?.value
+  return verifySessionToken(token, secret).catch(() => false)
+}

@@ -44,8 +44,10 @@ export async function GET(req: NextRequest) {
     prisma.verificationToken.delete({ where: { token } }),
   ])
 
+  // Note: only `verified=1` — the email address is intentionally NOT included
+  // in the redirect URL to keep it out of browser history and Referer headers
+  // on outbound clicks from the login page.
   const successUrl = new URL('/login', url.origin)
   successUrl.searchParams.set('verified', '1')
-  successUrl.searchParams.set('email', record.identifier)
   return NextResponse.redirect(successUrl)
 }
